@@ -12,6 +12,12 @@ export function buildSajuPrompt({ name, birth, time, gender, calendar, chartText
 - 반드시 아래 명식만 근거로 해석하라.
 - 같은 명식에는 같은 핵심 결론을 유지하라. 문장만 자연스럽게 다듬어도 된다.
 
+말투·문장 금지 (AI처럼 보이지 않게):
+- **굵게**, *기울임*, __밑줄__ 같은 강조 기호를 절대 쓰지 마라.
+- 용어 뒤에 (괄호)로 한자·영문·사전식 설명을 덧붙이지 마라. 예: 편재(偏財), 상관(傷官), 용신(用神) 금지.
+- "요약하자면", "결론적으로", "한마디로", "흥미롭게도" 같은 상투적 AI 말버릇을 피하라.
+- 사람이 말로 풀어주듯 자연스러운 문장으로만 써라.
+
 질문: 이 사람의 전반적인 성격, 기질, 재능을 분석해 주세요.
 사주 용어에 익숙하지 않다고 가정하고 쉽고 명확하게, 핵심 근거를 밝혀서.
 1) 차분하지만 흥미롭게  2) 특이한 점 언급  3) 약점도 솔직하게
@@ -22,8 +28,9 @@ export function buildSajuPrompt({ name, birth, time, gender, calendar, chartText
 
 출력 형식:
 - 한국어만 사용
-- 마크다운 사용 (## 소제목, 본문 문단, 필요 시 - 목록)
-- 코드블록은 쓰지 말 것
+- ## 소제목과 문단만 사용 (목록이 필요하면 - 만)
+- 본문에 **, *, (), 코드블록을 쓰지 말 것
+- 사주 용어는 본문 안에서 바로 쉽게 풀어 설명해라
 
 이름: ${name} / 성별: ${gender} / ${calendar} ${birth} ${time}생
 
@@ -31,4 +38,23 @@ export function buildSajuPrompt({ name, birth, time, gender, calendar, chartText
 ${chartText}
 
 return only Korean.`
+}
+
+// 혹시 남은 AI 티(**강조, 불필요 괄호 등)를 결과에서 정리
+export function cleanSajuText(text) {
+  if (!text) return text
+
+  return text
+    // **강조** / __강조__ 제거
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    // *기울임* 제거 (목록 기호 - 는 유지)
+    .replace(/(?<!\w)\*([^*\n]+)\*(?!\w)/g, '$1')
+    // 용어(한자) / 용어(English) 형태 괄호 설명 제거
+    .replace(/([\uac00-\ud7a3A-Za-z]+)\((?:[\u4e00-\u9fff·\s]+|[A-Za-z][A-Za-z\s/&\-]*)\)/g, '$1')
+    // 빈 강조 잔여물
+    .replace(/\*{1,2}/g, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/ \n/g, '\n')
+    .trim()
 }

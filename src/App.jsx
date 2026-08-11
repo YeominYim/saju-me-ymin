@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Markdown from 'react-markdown'
 import { GoogleGenAI } from '@google/genai'
-import { buildSajuPrompt } from './buildSajuPrompt'
+import { buildSajuPrompt, cleanSajuText } from './buildSajuPrompt'
 import { calculateChart, makeCacheKey } from './sajuChart'
 import './App.css'
 
@@ -74,7 +74,7 @@ function App() {
       })
       const cached = localStorage.getItem(cacheKey)
       if (cached) {
-        setResult(cached)
+        setResult(cleanSajuText(cached))
         return
       }
 
@@ -93,7 +93,9 @@ function App() {
         store: false,
       })
 
-      const text = interaction.output_text || '결과를 받지 못했습니다.'
+      const text = cleanSajuText(
+        interaction.output_text || '결과를 받지 못했습니다.',
+      )
       localStorage.setItem(cacheKey, text)
       setResult(text)
     } catch (err) {
