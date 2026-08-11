@@ -162,20 +162,24 @@ function App() {
 
               <label className="field field-date">
                 <span>생년월일</span>
-                <input
-                  type="date"
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
-                />
+                <div className="control">
+                  <input
+                    type="date"
+                    value={birthDate}
+                    onChange={(e) => setBirthDate(e.target.value)}
+                  />
+                </div>
               </label>
 
-              <label className="field">
+              <label className="field field-time">
                 <span>태어난 시간</span>
-                <input
-                  type="time"
-                  value={birthTime}
-                  onChange={(e) => setBirthTime(e.target.value)}
-                />
+                <div className="control">
+                  <input
+                    type="time"
+                    value={birthTime}
+                    onChange={(e) => setBirthTime(e.target.value)}
+                  />
+                </div>
               </label>
             </div>
           </div>

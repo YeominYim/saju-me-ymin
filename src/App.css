@@ -158,6 +158,8 @@
 
 .form-grid {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -167,6 +169,9 @@
   display: grid;
   gap: 0.9rem 1rem;
   align-items: end;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 /* 1줄: 이름 + 성별 */
@@ -187,7 +192,8 @@
   align-items: stretch;
   gap: 0.4rem;
   width: 100%;
-  min-width: 0; /* 그리드에서 date/time 넘침 방지 */
+  max-width: 100%;
+  min-width: 0;
   text-align: left;
 }
 
@@ -213,13 +219,53 @@
   min-height: 2.6rem;
 }
 
-/* 모바일 브라우저 date/time 기본 최소너비 때문에 테두리 밖으로 나가는 것 막기 */
-.field input[type="date"],
-.field input[type="time"] {
+/*
+  date/time은 모바일에서 내부 최소너비가 커서 박스만 넓어짐.
+  테두리는 .control에 두고, input은 그 안에서만 움직이게 함.
+*/
+.control {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: rgba(8, 12, 10, 0.65);
+}
+
+.control:focus-within {
+  outline: 1px solid var(--jade);
+  border-color: var(--jade);
+}
+
+.control input[type="date"],
+.control input[type="time"] {
   display: block;
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  color: var(--fog);
+  font-family: inherit;
+  font-size: 0.95rem;
+  min-height: 2.6rem;
+  padding: 0.65rem 0.75rem;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.control input[type="date"]::-webkit-date-and-time-value,
+.control input[type="time"]::-webkit-date-and-time-value {
+  text-align: left;
+}
+
+.control input[type="date"]::-webkit-calendar-picker-indicator,
+.control input[type="time"]::-webkit-calendar-picker-indicator {
+  margin: 0;
+  opacity: 0.7;
 }
 
 .field input:focus,
@@ -413,7 +459,7 @@
 
   .panel {
     padding: 1.25rem 0.9rem;
-    overflow: hidden; /* 자식 입력이 패널 테두리를 넘지 않게 */
+    overflow: hidden;
   }
 
   .form-row-identity,
@@ -423,9 +469,9 @@
 
   .field input,
   .field select,
-  .field input[type="date"],
-  .field input[type="time"] {
-    font-size: 16px; /* iOS 확대 줌 방지 + 너비 안정 */
+  .control input[type="date"],
+  .control input[type="time"] {
+    font-size: 16px; /* iOS 자동 확대 방지 */
     padding: 0.7rem 0.65rem;
   }
 }
