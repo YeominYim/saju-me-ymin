@@ -1,41 +1,16 @@
-# saju-me-ymin
+# React + Vite
 
-나만의 사주 웹 서비스
+This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
-생년월일시를 입력하면 사주팔자를 계산하고, 해석 결과를 쉽게 볼 수 있는 웹 애플리케이션입니다.
+Currently, two official plugins are available:
 
-## 목표
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
-- 생년월일시 기반 사주팔자 계산
-- 오행·십성·대운 등 기본 해석 제공
-- 모바일·데스크톱에서 읽기 쉬운 UI
+## React Compiler
 
-## 예정 기능
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-- [ ] 생년월일시 / 성별 입력 폼
-- [ ] 사주팔자(년·월·일·시주) 계산
-- [ ] 오행 분포 시각화
-- [ ] 기본 성격·운세 해석
-- [ ] 결과 공유 / 저장
+## Expanding the Oxlint configuration
 
-## 기술 스택 (예정)
-
-- Frontend: Next.js, TypeScript, Tailwind CSS
-- Backend / API: Next.js Route Handlers 또는 별도 API
-- 배포: Vercel
-
-## 시작하기
-
-```bash
-# 저장소 클론
-git clone https://github.com/YeominYim/saju-me-ymin.git
-cd saju-me-ymin
-
-# (프로젝트 세팅 후)
-npm install
-npm run dev
-```
-
-## 라이선스
-
-Private / Personal project
+If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
