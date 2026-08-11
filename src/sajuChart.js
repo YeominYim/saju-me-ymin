@@ -24,6 +24,6 @@ export function calculateChart({ birthDate, birthTime, gender, calendarType }) {
 
 // 같은 입력인지 구분하는 캐시 키
 export function makeCacheKey({ name, birthDate, birthTime, gender, calendarType }) {
-  // v2: 강조/괄호 정리 프롬프트 변경으로 캐시 구분
-  return `saju:v2:${name}|${birthDate}|${birthTime}|${gender}|${calendarType}`
+  // v3: 중요 내용 **강조** 하이라이트 복구
+  return `saju:v3:${name}|${birthDate}|${birthTime}|${gender}|${calendarType}`
 }
