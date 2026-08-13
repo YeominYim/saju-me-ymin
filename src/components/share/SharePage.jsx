@@ -1,30 +1,12 @@
 import { useEffect, useState } from 'react'
 import Markdown from 'react-markdown'
-import SajuChartCard from './SajuChartCard'
-import SajuGirl from './SajuGirl'
-import { getGenre } from './genres'
-import { fetchSharedReading, homeFromSharePath } from './share'
-import './App.css'
-
-function ShareInvite({ genreId, selfName }) {
-  const href = homeFromSharePath(genreId)
-
-  return (
-    <section className="share-invite">
-      <SajuGirl size="sm" />
-      <p className="share-invite-kicker">친구 사주를 다 읽었다면</p>
-      <h2 className="share-invite-title">나도 사주 보러가기</h2>
-      <p className="share-invite-lead">
-        {selfName
-          ? `${selfName}의 사주를 봤다면, 내 명식도 한 번 펼쳐 보세요.`
-          : '생년월일만 있으면 바로 읽어 드려요.'}
-      </p>
-      <a className="analyze-btn share-invite-btn" href={href}>
-        나도 사주 보러가기
-      </a>
-    </section>
-  )
-}
+import PageBackdrop from '@/components/ui/PageBackdrop'
+import SajuGirl from '@/components/ui/SajuGirl'
+import ChartSection from '@/components/reading/ChartSection'
+import ReadingSkeleton from '@/components/reading/ReadingSkeleton'
+import ShareInvite from '@/components/share/ShareInvite'
+import { getGenre } from '@/lib/genres'
+import { fetchSharedReading, homeFromSharePath } from '@/lib/share'
 
 export default function SharePage({ shareId }) {
   const [share, setShare] = useState(null)
@@ -83,9 +65,7 @@ export default function SharePage({ shareId }) {
 
   return (
     <div className="page share-page">
-      <div className="glow glow-a" aria-hidden="true" />
-      <div className="glow glow-b" aria-hidden="true" />
-      <div className="mist" aria-hidden="true" />
+      <PageBackdrop />
 
       <header className="share-topbar">
         <a className="share-brand" href={homeHref}>
@@ -98,18 +78,11 @@ export default function SharePage({ shareId }) {
 
       <main className="shell">
         {loading && (
-          <section className="reading skeleton-reading" aria-busy="true">
-            <h2 className="reading-title">공유된 사주</h2>
-            <p className="skeleton-status">명식을 펼치는 중이에요!</p>
-            <div className="skeleton-lines">
-              {Array.from({ length: 6 }, (_, i) => (
-                <div
-                  key={i}
-                  className={`skeleton-line ${i % 3 === 2 ? 'short' : i % 2 === 0 ? 'long' : 'mid'}`}
-                />
-              ))}
-            </div>
-          </section>
+          <ReadingSkeleton
+            title="공유된 사주"
+            lines={6}
+            status="명식을 펼치는 중이에요!"
+          />
         )}
 
         {!loading && error && (
@@ -135,20 +108,7 @@ export default function SharePage({ shareId }) {
               </div>
             </header>
 
-            {Array.isArray(share.chart_views) && share.chart_views.length > 0 && (
-              <section className="reading chart-reading">
-                <h2 className="reading-title">사주 명식</h2>
-                <div className="chart-cards">
-                  {share.chart_views.map((item, index) => (
-                    <SajuChartCard
-                      key={item.label || `chart-${index}`}
-                      label={item.label}
-                      view={item.view}
-                    />
-                  ))}
-                </div>
-              </section>
-            )}
+            <ChartSection chartViews={share.chart_views} />
 
             <section className="reading result-reading">
               <div className="result-head">

@@ -1,6 +1,6 @@
-import AuthPanel from './AuthPanel'
-import { getGenre } from './genres'
-import { displayName } from './sajuReadings'
+import AuthPanel from '@/components/auth/AuthPanel'
+import { getGenre } from '@/lib/genres'
+import { displayName } from '@/lib/sajuReadings'
 
 export default function HistorySidebar({
   user,

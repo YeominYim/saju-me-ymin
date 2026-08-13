@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { personByline, rowToPerson } from './person'
+import { personByline, rowToPerson } from '@/lib/person'
 
 export default function ProfilePickerModal({
   open,

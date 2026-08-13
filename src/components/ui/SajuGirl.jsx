@@ -1,4 +1,4 @@
-import sajuGirl from './assets/saju-girl.png'
+import sajuGirl from '@/assets/saju-girl.png'
 
 export default function SajuGirl({
   size = 'md',

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { canNativeShare, copyText, shareUrl } from './share'
+import { canNativeShare, copyText, shareUrl } from '@/lib/share'
 
 export default function ShareModal({
   open,

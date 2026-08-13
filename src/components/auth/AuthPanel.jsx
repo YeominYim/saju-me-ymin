@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { displayUserName, signInWithGoogle, signOut } from './useAuth'
+import { displayUserName, signInWithGoogle, signOut } from '@/hooks/useAuth'
 
 export function GoogleSignInButton({
   label = 'Google로 로그인',

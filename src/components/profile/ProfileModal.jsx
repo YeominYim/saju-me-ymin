@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import PersonForm from './PersonForm'
-import { emptyPerson, validatePerson } from './person'
+import PersonForm from '@/components/profile/PersonForm'
+import { emptyPerson, validatePerson } from '@/lib/person'
 
 const COPY = {
   required: {
