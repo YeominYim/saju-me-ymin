@@ -130,8 +130,8 @@ export function makeCacheKey({
   self,
   partner = null,
 }) {
-  // v6: 평생요약 + 딥장르, 궁합(상대) 지원
-  const base = `saju:v6:${genreId}|self:${personKey(self)}`
+  // v8: 밝고 귀여운 아기 말투 + 어른스러운 해석
+  const base = `saju:v8:${genreId}|self:${personKey(self)}`
   if (!partner) return base
   return `${base}|partner:${personKey(partner)}`
 }
