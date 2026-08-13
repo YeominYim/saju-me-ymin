@@ -1,7 +1,13 @@
 import { getGenre } from './genres'
 import { displayName } from './sajuReadings'
 
-export default function HistorySidebar({ readings, activeId, onSelect, onNew }) {
+export default function HistorySidebar({
+  readings,
+  activeId,
+  onSelect,
+  onNew,
+  onDelete,
+}) {
   return (
     <aside className="history-sidebar" aria-label="저장된 사주">
       <h2 className="history-title">저장된 사주</h2>
@@ -17,7 +23,7 @@ export default function HistorySidebar({ readings, activeId, onSelect, onNew }) 
       ) : (
         <ul className="history-list">
           {readings.map((row) => (
-            <li key={row.id}>
+            <li key={row.id} className="history-row">
               <button
                 type="button"
                 className={`history-item ${row.id === activeId ? 'is-active' : ''}`}
@@ -25,6 +31,14 @@ export default function HistorySidebar({ readings, activeId, onSelect, onNew }) 
               >
                 <span className="history-name">{displayName(row)}</span>
                 <span className="history-genre">{getGenre(row.genre_id).label}</span>
+              </button>
+              <button
+                type="button"
+                className="history-delete"
+                onClick={() => onDelete(row)}
+                aria-label={`${displayName(row)} 삭제`}
+              >
+                삭제
               </button>
             </li>
           ))}

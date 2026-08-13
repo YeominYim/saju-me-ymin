@@ -6,7 +6,7 @@ import { DEFAULT_GENRE_ID, GENRES, getGenre } from './genres'
 import SajuChartCard from './SajuChartCard'
 import HistorySidebar from './HistorySidebar'
 import { formatApiError, generateSajuText, hasGeminiKey } from './gemini'
-import { fetchSajuReadings, rowToPeople, saveSajuReading } from './sajuReadings'
+import { fetchSajuReadings, rowToPeople, saveSajuReading, updateSajuReading, deleteSajuReading } from './sajuReadings'
 import './App.css'
 
 const genderLabel = { male: '남자', female: '여자' }
@@ -177,6 +177,7 @@ function App() {
   const [error, setError] = useState('')
   const [readings, setReadings] = useState([])
   const [activeReadingId, setActiveReadingId] = useState('')
+  const [editingId, setEditingId] = useState('')
   const [formKey, setFormKey] = useState(0)
   const nameInputRef = useRef(null)
 
@@ -230,6 +231,7 @@ function App() {
     setResult(cleanSajuText(row.result_text || ''))
     setError('')
     setActiveReadingId(row.id)
+    setEditingId('')
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
@@ -240,20 +242,42 @@ function App() {
     setResult('')
     setError('')
     setActiveReadingId('')
+    setEditingId('')
     setFormKey((key) => key + 1)
     window.scrollTo({ top: 0, behavior: 'smooth' })
     window.setTimeout(() => nameInputRef.current?.focus(), 120)
   }
 
   function handleEditReading() {
+    const targetId = activeReadingId || editingId
+    if (!targetId) return
+    setEditingId(targetId)
     setActiveReadingId('')
     window.scrollTo({ top: 0, behavior: 'smooth' })
     window.setTimeout(() => nameInputRef.current?.focus(), 120)
   }
 
+  async function handleDeleteReading(row) {
+    const id = row?.id
+    if (!id) return
+    const label = row.name || '이 사주'
+    if (!window.confirm(`‘${label}’ 사주를 삭제할까요?`)) return
+
+    try {
+      await deleteSajuReading(id)
+      setReadings((prev) => prev.filter((item) => item.id !== id))
+      if (activeReadingId === id || editingId === id) {
+        handleNewReading()
+      }
+    } catch (err) {
+      console.error(err)
+      setError('사주를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    }
+  }
+
   async function persistReading({ genreId: nextGenreId, selfInput, partnerInput, text }) {
     try {
-      const saved = await saveSajuReading({
+      const payload = {
         genreId: nextGenreId,
         self: {
           ...selfInput,
@@ -266,14 +290,26 @@ function App() {
             }
           : null,
         resultText: text,
-      })
+      }
+      const saved = editingId
+        ? await updateSajuReading({ id: editingId, ...payload })
+        : await saveSajuReading(payload)
       if (saved) {
-        setReadings((prev) => [saved, ...prev.filter((row) => row.id !== saved.id)])
+        setReadings((prev) => [
+          saved,
+          ...prev.filter((row) => row.id !== saved.id),
+        ])
+        setEditingId('')
         setActiveReadingId(saved.id)
         window.scrollTo({ top: 0, behavior: 'smooth' })
       }
     } catch (err) {
       console.error(err)
+      setError(
+        editingId
+          ? '사주를 수정하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+          : '사주를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      )
     }
   }
 
@@ -388,9 +424,10 @@ function App() {
 
       <HistorySidebar
         readings={readings}
-        activeId={activeReadingId}
+        activeId={activeReadingId || editingId}
         onSelect={handleSelectReading}
         onNew={handleNewReading}
+        onDelete={handleDeleteReading}
       />
 
       <main className="shell">
@@ -421,6 +458,18 @@ function App() {
                   onClick={handleEditReading}
                 >
                   다시 입력하기
+                </button>
+                <button
+                  type="button"
+                  className="delete-reading-btn"
+                  onClick={() =>
+                    handleDeleteReading({
+                      id: activeReadingId,
+                      name: self.name,
+                    })
+                  }
+                >
+                  삭제
                 </button>
               </div>
             </header>
@@ -464,6 +513,18 @@ function App() {
                 >
                   다시 입력하기
                 </button>
+                <button
+                  type="button"
+                  className="delete-reading-btn"
+                  onClick={() =>
+                    handleDeleteReading({
+                      id: activeReadingId,
+                      name: self.name,
+                    })
+                  }
+                >
+                  삭제
+                </button>
               </div>
             </section>
           </div>
@@ -484,6 +545,9 @@ function App() {
             </header>
 
             <section className="panel" key={formKey} aria-label={`${genre.label} 입력`}>
+              {editingId && (
+                <p className="edit-banner">저장된 사주를 수정합니다. 다시 보면 이 기록이 바뀝니다.</p>
+              )}
               <PersonForm
                 title={needsPartner ? '본인' : ''}
                 person={self}
@@ -505,7 +569,11 @@ function App() {
                 onClick={handleAnalyze}
                 disabled={loading}
               >
-                {loading ? '명식을 읽는 중…' : genre.buttonLabel}
+                {loading
+                  ? '명식을 읽는 중…'
+                  : editingId
+                    ? `${genre.label} 다시 저장`
+                    : genre.buttonLabel}
               </button>
 
               {error && <p className="error">{error}</p>}
@@ -560,6 +628,20 @@ function App() {
                   >
                     새 사주 만들기
                   </button>
+                  {editingId && (
+                    <button
+                      type="button"
+                      className="delete-reading-btn"
+                      onClick={() =>
+                        handleDeleteReading({
+                          id: editingId,
+                          name: self.name,
+                        })
+                      }
+                    >
+                      삭제
+                    </button>
+                  )}
                 </div>
               </section>
             )}

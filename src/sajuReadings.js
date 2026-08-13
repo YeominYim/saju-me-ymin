@@ -41,6 +41,26 @@ export function rowToPeople(row) {
   return { self, partner }
 }
 
+function toReadingPayload({ genreId, self, partner, resultText }) {
+  return {
+    genre_id: genreId,
+    name: self.name,
+    birth_date: self.birthDate,
+    birth_time: toTimeValue(self),
+    time_unknown: Boolean(self.timeUnknown),
+    gender: self.gender,
+    calendar_type: self.calendarType,
+    partner_name: partner?.name || null,
+    partner_birth_date: partner?.birthDate || null,
+    partner_birth_time: toTimeValue(partner),
+    partner_time_unknown: partner ? Boolean(partner.timeUnknown) : null,
+    partner_gender: partner?.gender || null,
+    partner_calendar_type: partner?.calendarType || null,
+    result_text: resultText,
+    updated_at: new Date().toISOString(),
+  }
+}
+
 export async function fetchSajuReadings() {
   if (!supabase) return []
 
@@ -58,25 +78,37 @@ export async function saveSajuReading({ genreId, self, partner, resultText }) {
 
   const { data, error } = await supabase
     .from('saju_readings')
-    .insert({
-      genre_id: genreId,
-      name: self.name,
-      birth_date: self.birthDate,
-      birth_time: toTimeValue(self),
-      time_unknown: Boolean(self.timeUnknown),
-      gender: self.gender,
-      calendar_type: self.calendarType,
-      partner_name: partner?.name || null,
-      partner_birth_date: partner?.birthDate || null,
-      partner_birth_time: toTimeValue(partner),
-      partner_time_unknown: partner ? Boolean(partner.timeUnknown) : null,
-      partner_gender: partner?.gender || null,
-      partner_calendar_type: partner?.calendarType || null,
-      result_text: resultText,
-    })
+    .insert(toReadingPayload({ genreId, self, partner, resultText }))
     .select()
     .single()
 
   if (error) throw error
   return data
+}
+
+export async function updateSajuReading({
+  id,
+  genreId,
+  self,
+  partner,
+  resultText,
+}) {
+  if (!supabase || !id) return null
+
+  const { data, error } = await supabase
+    .from('saju_readings')
+    .update(toReadingPayload({ genreId, self, partner, resultText }))
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function deleteSajuReading(id) {
+  if (!supabase || !id) return
+
+  const { error } = await supabase.from('saju_readings').delete().eq('id', id)
+  if (error) throw error
 }
