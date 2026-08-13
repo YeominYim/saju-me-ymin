@@ -41,8 +41,9 @@ export function rowToPeople(row) {
   return { self, partner }
 }
 
-function toReadingPayload({ genreId, self, partner, resultText }) {
+function toReadingPayload({ genreId, self, partner, resultText, userId }) {
   return {
+    user_id: userId,
     genre_id: genreId,
     name: self.name,
     birth_date: self.birthDate,
@@ -61,24 +62,31 @@ function toReadingPayload({ genreId, self, partner, resultText }) {
   }
 }
 
-export async function fetchSajuReadings() {
-  if (!supabase) return []
+export async function fetchSajuReadings(userId) {
+  if (!supabase || !userId) return []
 
   const { data, error } = await supabase
     .from('saju_readings')
     .select('*')
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
 
   if (error) throw error
   return data || []
 }
 
-export async function saveSajuReading({ genreId, self, partner, resultText }) {
-  if (!supabase) return null
+export async function saveSajuReading({
+  genreId,
+  self,
+  partner,
+  resultText,
+  userId,
+}) {
+  if (!supabase || !userId) return null
 
   const { data, error } = await supabase
     .from('saju_readings')
-    .insert(toReadingPayload({ genreId, self, partner, resultText }))
+    .insert(toReadingPayload({ genreId, self, partner, resultText, userId }))
     .select()
     .single()
 
@@ -92,13 +100,15 @@ export async function updateSajuReading({
   self,
   partner,
   resultText,
+  userId,
 }) {
-  if (!supabase || !id) return null
+  if (!supabase || !id || !userId) return null
 
   const { data, error } = await supabase
     .from('saju_readings')
-    .update(toReadingPayload({ genreId, self, partner, resultText }))
+    .update(toReadingPayload({ genreId, self, partner, resultText, userId }))
     .eq('id', id)
+    .eq('user_id', userId)
     .select()
     .single()
 

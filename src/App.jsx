@@ -7,6 +7,7 @@ import SajuChartCard from './SajuChartCard'
 import HistorySidebar from './HistorySidebar'
 import { formatApiError, generateSajuText, hasGeminiKey } from './gemini'
 import { fetchSajuReadings, rowToPeople, saveSajuReading, updateSajuReading, deleteSajuReading } from './sajuReadings'
+import { useAuth } from './useAuth'
 import './App.css'
 
 const genderLabel = { male: '남자', female: '여자' }
@@ -180,15 +181,25 @@ function App() {
   const [editingId, setEditingId] = useState('')
   const [formKey, setFormKey] = useState(0)
   const nameInputRef = useRef(null)
+  const { user, ready, authError } = useAuth()
 
   const genre = getGenre(genreId)
   const needsPartner = genre.needsPartner
   const isViewing = Boolean(activeReadingId && result && !loading)
 
   useEffect(() => {
+    if (authError) setError(authError)
+  }, [authError])
+
+  useEffect(() => {
     let cancelled = false
 
-    fetchSajuReadings()
+    if (!user) {
+      setReadings([])
+      return
+    }
+
+    fetchSajuReadings(user.id)
       .then((rows) => {
         if (!cancelled) setReadings(rows)
       })
@@ -199,7 +210,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [user])
 
   function handleGenreChange(nextId) {
     if (nextId === genreId) return
@@ -276,9 +287,12 @@ function App() {
   }
 
   async function persistReading({ genreId: nextGenreId, selfInput, partnerInput, text }) {
+    if (!user) return
+
     try {
       const payload = {
         genreId: nextGenreId,
+        userId: user.id,
         self: {
           ...selfInput,
           timeUnknown: self.timeUnknown,
@@ -423,11 +437,14 @@ function App() {
       </nav>
 
       <HistorySidebar
+        user={user}
+        ready={ready}
         readings={readings}
         activeId={activeReadingId || editingId}
         onSelect={handleSelectReading}
         onNew={handleNewReading}
         onDelete={handleDeleteReading}
+        onAuthError={setError}
       />
 
       <main className="shell">

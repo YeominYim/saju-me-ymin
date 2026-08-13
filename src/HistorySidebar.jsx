@@ -1,16 +1,21 @@
+import AuthPanel from './AuthPanel'
 import { getGenre } from './genres'
 import { displayName } from './sajuReadings'
 
 export default function HistorySidebar({
+  user,
+  ready,
   readings,
   activeId,
   onSelect,
   onNew,
   onDelete,
+  onAuthError,
 }) {
   return (
     <aside className="history-sidebar" aria-label="저장된 사주">
       <h2 className="history-title">저장된 사주</h2>
+      <AuthPanel user={user} ready={ready} onError={onAuthError} />
       <button
         type="button"
         className={`history-new-btn ${activeId ? '' : 'is-active'}`}
@@ -18,7 +23,11 @@ export default function HistorySidebar({
       >
         새 사주 만들기
       </button>
-      {readings.length === 0 ? (
+      {!ready ? (
+        <p className="history-empty">불러오는 중…</p>
+      ) : !user ? (
+        <p className="history-empty">로그인하면 여기에 쌓입니다</p>
+      ) : readings.length === 0 ? (
         <p className="history-empty">아직 없습니다</p>
       ) : (
         <ul className="history-list">
