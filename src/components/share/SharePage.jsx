@@ -5,6 +5,7 @@ import SajuGirl from '@/components/ui/SajuGirl'
 import ChartSection from '@/components/reading/ChartSection'
 import ReadingSkeleton from '@/components/reading/ReadingSkeleton'
 import ShareInvite from '@/components/share/ShareInvite'
+import { trackEvent } from '@/lib/analytics'
 import { getGenre } from '@/lib/genres'
 import { fetchSharedReading, homeFromSharePath } from '@/lib/share'
 
@@ -33,6 +34,9 @@ export default function SharePage({ shareId }) {
           return
         }
         setShare(row)
+        trackEvent('view_share', {
+          genre_id: row.genre_id || '',
+        })
       })
       .catch((err) => {
         console.error(err)
@@ -71,7 +75,11 @@ export default function SharePage({ shareId }) {
         <a className="share-brand" href={homeHref}>
           사주미
         </a>
-        <a className="share-home-link" href={homeHref}>
+        <a
+          className="share-home-link"
+          href={homeHref}
+          onClick={() => trackEvent('share_cta', { placement: 'topbar' })}
+        >
           나도 사주 보러가기
         </a>
       </header>
@@ -90,7 +98,11 @@ export default function SharePage({ shareId }) {
             <SajuGirl size="md" />
             <h1 className="headline">링크를 찾지 못했어요</h1>
             <p className="sub">{error}</p>
-            <a className="analyze-btn share-invite-btn" href={homeFromSharePath()}>
+            <a
+              className="analyze-btn share-invite-btn"
+              href={homeFromSharePath()}
+              onClick={() => trackEvent('share_cta', { placement: 'missing' })}
+            >
               나도 사주 보러가기
             </a>
           </section>
@@ -131,7 +143,16 @@ export default function SharePage({ shareId }) {
       </main>
 
       {!loading && (
-        <a className="share-sticky-cta" href={homeHref}>
+        <a
+          className="share-sticky-cta"
+          href={homeHref}
+          onClick={() =>
+            trackEvent('share_cta', {
+              placement: 'sticky',
+              genre_id: share?.genre_id || '',
+            })
+          }
+        >
           나도 사주 보러가기
         </a>
       )}

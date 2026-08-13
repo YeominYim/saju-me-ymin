@@ -1,4 +1,5 @@
 import { GoogleSignInButton } from '@/components/auth/AuthPanel'
+import { trackEvent } from '@/lib/analytics'
 import { savePendingGenre } from '@/lib/guestResult'
 
 export default function GenreAuthGate({ genre, onAuthError, onSeeLife }) {
@@ -13,12 +14,20 @@ export default function GenreAuthGate({ genre, onAuthError, onSeeLife }) {
       </p>
       <GoogleSignInButton
         label={`Google로 로그인하고 ${genre.label} 보기`}
+        source="genre_gate"
         redirectTo={redirectTo}
         onBeforeSignIn={() => savePendingGenre(genre.id)}
         onError={onAuthError}
       />
       {onSeeLife && (
-        <button type="button" className="profile-edit-link" onClick={onSeeLife}>
+        <button
+          type="button"
+          className="profile-edit-link"
+          onClick={() => {
+            trackEvent('see_life', { from_genre: genre.id })
+            onSeeLife()
+          }}
+        >
           먼저 평생운세 보기
         </button>
       )}

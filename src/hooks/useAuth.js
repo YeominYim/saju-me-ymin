@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { trackEvent } from '@/lib/analytics'
 import { supabase } from '@/lib/supabaseClient'
 
 function readAuthRedirectError() {
@@ -46,10 +47,13 @@ export function useAuth() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (!cancelled) {
         setUser(session?.user ?? null)
         setReady(true)
+      }
+      if (event === 'SIGNED_IN') {
+        trackEvent('login', { method: 'google' })
       }
     })
 

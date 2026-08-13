@@ -8,6 +8,7 @@ export default function GuestUpgrade({ onAuthError }) {
       </p>
       <GoogleSignInButton
         label="Google로 로그인하고 더 보기"
+        source="guest_upgrade"
         onError={onAuthError}
       />
     </div>

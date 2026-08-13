@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { displayUserName, signInWithGoogle, signOut } from '@/hooks/useAuth'
+import { trackEvent } from '@/lib/analytics'
 
 export function GoogleSignInButton({
   label = 'Google로 로그인',
@@ -7,12 +8,14 @@ export function GoogleSignInButton({
   onBeforeSignIn,
   redirectTo,
   className = '',
+  source = 'unknown',
 }) {
   const [busy, setBusy] = useState(false)
 
   async function handleSignIn() {
     setBusy(true)
     try {
+      trackEvent('login_click', { method: 'google', source })
       onBeforeSignIn?.()
       await signInWithGoogle(redirectTo)
     } catch (err) {
@@ -41,6 +44,7 @@ export default function AuthPanel({ user, ready, profileName, onError, onEditPro
   async function handleSignOut() {
     setBusy(true)
     try {
+      trackEvent('sign_out')
       await signOut()
     } catch (err) {
       console.error(err)
@@ -61,7 +65,7 @@ export default function AuthPanel({ user, ready, profileName, onError, onEditPro
   if (!user) {
     return (
       <div className="auth-panel">
-        <GoogleSignInButton onError={onError} />
+        <GoogleSignInButton source="sidebar" onError={onError} />
         <p className="auth-hint">평생운세는 바로 볼 수 있어요. 다른 장르는 로그인하면 열려요.</p>
       </div>
     )

@@ -33,6 +33,7 @@ import {
   upsertSajuShare,
 } from '@/lib/share'
 import { fetchProfiles, saveProfile } from '@/lib/userProfile'
+import { trackEvent } from '@/lib/analytics'
 import { useAuth } from '@/hooks/useAuth'
 
 function genreIdFromSearch() {
@@ -223,6 +224,11 @@ export function useSajuApp() {
 
   function handleGenreChange(nextId) {
     if (nextId === genreId) return
+    const nextGenre = getGenre(nextId)
+    trackEvent('select_genre', {
+      genre_id: nextId,
+      genre_label: nextGenre.label,
+    })
     setGenreId(nextId)
     setChartViews([])
     setResult('')
@@ -276,6 +282,12 @@ export function useSajuApp() {
     if (!user && guestShareRef.current.key === guestKey && guestShareRef.current.id) {
       setShareId(guestShareRef.current.id)
       setShareOpen(true)
+      trackEvent('share', {
+        method: 'link',
+        content_type: 'reading',
+        genre_id: genreId,
+        logged_in: false,
+      })
       return
     }
 
@@ -289,6 +301,12 @@ export function useSajuApp() {
       if (!user) guestShareRef.current = { key: guestKey, id }
       setShareId(id)
       setShareOpen(true)
+      trackEvent('share', {
+        method: 'link',
+        content_type: 'reading',
+        genre_id: genreId,
+        logged_in: Boolean(user),
+      })
     } catch (err) {
       console.error(err)
       showToast('공유 링크를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.')
@@ -303,6 +321,7 @@ export function useSajuApp() {
     guestShareRef.current = { key: '', id: '' }
     setShareId('')
     setShareOpen(false)
+    trackEvent('share_revoke', { genre_id: genreId })
     showToast('공유를 취소했어요.')
   }
 
@@ -336,6 +355,11 @@ export function useSajuApp() {
       showToast('지금은 명식을 읽고 있어요!')
       return
     }
+
+    trackEvent('new_reading', {
+      genre_id: genreId,
+      logged_in: Boolean(user),
+    })
 
     if (user) {
       if (profiles.length) {
@@ -402,6 +426,7 @@ export function useSajuApp() {
     })
     setProfileOpen(false)
     setError('')
+    trackEvent('save_profile', { mode: profileMode })
     if (creating) resetToNewForm()
   }
 
@@ -486,6 +511,12 @@ export function useSajuApp() {
     const selfInput = toChartInput(self)
     const partnerInput = needsPartner ? toChartInput(partner) : null
 
+    trackEvent('generate_reading', {
+      genre_id: genreId,
+      genre_label: genre.label,
+      logged_in: Boolean(user),
+    })
+
     try {
       const charts = buildChartBundle({
         self: selfInput,
@@ -511,6 +542,12 @@ export function useSajuApp() {
           })
         }
         await persistReading({ genreId, partnerInput, text })
+        trackEvent('reading_complete', {
+          genre_id: genreId,
+          genre_label: genre.label,
+          cached: true,
+          logged_in: Boolean(user),
+        })
         return
       }
 
@@ -552,9 +589,19 @@ export function useSajuApp() {
         })
       }
       await persistReading({ genreId, partnerInput, text })
+      trackEvent('reading_complete', {
+        genre_id: genreId,
+        genre_label: genre.label,
+        cached: false,
+        logged_in: Boolean(user),
+      })
     } catch (err) {
       console.error(err)
       setError(formatApiError(err))
+      trackEvent('reading_fail', {
+        genre_id: genreId,
+        genre_label: genre.label,
+      })
     } finally {
       setLoading(false)
     }

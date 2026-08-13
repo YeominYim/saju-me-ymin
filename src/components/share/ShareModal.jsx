@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { trackEvent } from '@/lib/analytics'
 import { canNativeShare, copyText, shareUrl } from '@/lib/share'
 
 export default function ShareModal({
@@ -36,6 +37,7 @@ export default function ShareModal({
       await copyText(url)
       setCopied(true)
       setError('')
+      trackEvent('share_copy', { method: 'copy' })
     } catch (err) {
       console.error(err)
       setError('링크를 복사하지 못했습니다. 직접 복사해 주세요.')
@@ -49,6 +51,7 @@ export default function ShareModal({
         text: '내 사주 결과를 보내 줄게. 너도 한 번 읽어 봐!',
         url,
       })
+      trackEvent('share', { method: 'native', content_type: 'reading' })
       onClose?.()
     } catch (err) {
       if (err?.name === 'AbortError') return

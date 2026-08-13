@@ -43,6 +43,7 @@ export default function ResultReading({
           </p>
           <GoogleSignInButton
             label="Google로 로그인하고 이어서 보기"
+            source="result_gate"
             onError={onAuthError}
           />
         </div>
