@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import { buildSajuPrompt, cleanSajuText } from './buildSajuPrompt'
 import { buildChartBundle, makeCacheKey } from './sajuChart'
 import { DEFAULT_GENRE_ID, GENRES, getGenre } from './genres'
 import SajuChartCard from './SajuChartCard'
+import HistorySidebar from './HistorySidebar'
 import { formatApiError, generateSajuText, hasGeminiKey } from './gemini'
+import { fetchSajuReadings, rowToPeople, saveSajuReading } from './sajuReadings'
 import './App.css'
 
 const genderLabel = { male: '남자', female: '여자' }
@@ -46,7 +48,7 @@ function ReadingSkeleton({ title, lines = 6, status = '잠시만 기다려 주�
   )
 }
 
-function PersonForm({ title, person, onChange }) {
+function PersonForm({ title, person, onChange, nameRef }) {
   function patch(partial) {
     onChange({ ...person, ...partial })
   }
@@ -71,6 +73,7 @@ function PersonForm({ title, person, onChange }) {
           <label className="field field-name">
             <span>이름</span>
             <input
+              ref={nameRef}
               type="text"
               value={person.name}
               onChange={(e) => patch({ name: e.target.value })}
@@ -143,6 +146,27 @@ function PersonForm({ title, person, onChange }) {
   )
 }
 
+function toChartInput(person) {
+  return {
+    name: person.name,
+    birthDate: person.birthDate,
+    birthTime: person.timeUnknown ? '' : person.birthTime,
+    gender: person.gender,
+    calendarType: person.calendarType,
+  }
+}
+
+function personByline(person) {
+  if (!person?.name) return ''
+  const gender = genderLabel[person.gender] || ''
+  const calendar = calendarLabel[person.calendarType] || ''
+  const birth = person.birthDate || ''
+  const time = person.timeUnknown ? '시간 모름' : person.birthTime
+  return [person.name, gender, [calendar, birth].filter(Boolean).join(' '), time]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 function App() {
   const [genreId, setGenreId] = useState(DEFAULT_GENRE_ID)
   const [self, setSelf] = useState(emptyPerson)
@@ -151,9 +175,30 @@ function App() {
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [readings, setReadings] = useState([])
+  const [activeReadingId, setActiveReadingId] = useState('')
+  const [formKey, setFormKey] = useState(0)
+  const nameInputRef = useRef(null)
 
   const genre = getGenre(genreId)
   const needsPartner = genre.needsPartner
+  const isViewing = Boolean(activeReadingId && result && !loading)
+
+  useEffect(() => {
+    let cancelled = false
+
+    fetchSajuReadings()
+      .then((rows) => {
+        if (!cancelled) setReadings(rows)
+      })
+      .catch((err) => {
+        console.error(err)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   function handleGenreChange(nextId) {
     if (nextId === genreId) return
@@ -161,6 +206,75 @@ function App() {
     setChartViews([])
     setResult('')
     setError('')
+    setActiveReadingId('')
+  }
+
+  function handleSelectReading(row) {
+    if (row.id === activeReadingId) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+
+    const { self: nextSelf, partner: nextPartner } = rowToPeople(row)
+    const selfInput = toChartInput(nextSelf)
+    const partnerInput = nextPartner ? toChartInput(nextPartner) : null
+    const charts = buildChartBundle({
+      self: selfInput,
+      partner: partnerInput,
+    })
+
+    setGenreId(row.genre_id)
+    setSelf(nextSelf)
+    setPartner(nextPartner || emptyPerson)
+    setChartViews(charts.views)
+    setResult(cleanSajuText(row.result_text || ''))
+    setError('')
+    setActiveReadingId(row.id)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  function handleNewReading() {
+    setSelf({ ...emptyPerson })
+    setPartner({ ...emptyPerson })
+    setChartViews([])
+    setResult('')
+    setError('')
+    setActiveReadingId('')
+    setFormKey((key) => key + 1)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    window.setTimeout(() => nameInputRef.current?.focus(), 120)
+  }
+
+  function handleEditReading() {
+    setActiveReadingId('')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    window.setTimeout(() => nameInputRef.current?.focus(), 120)
+  }
+
+  async function persistReading({ genreId: nextGenreId, selfInput, partnerInput, text }) {
+    try {
+      const saved = await saveSajuReading({
+        genreId: nextGenreId,
+        self: {
+          ...selfInput,
+          timeUnknown: self.timeUnknown,
+        },
+        partner: partnerInput
+          ? {
+              ...partnerInput,
+              timeUnknown: partner.timeUnknown,
+            }
+          : null,
+        resultText: text,
+      })
+      if (saved) {
+        setReadings((prev) => [saved, ...prev.filter((row) => row.id !== saved.id)])
+        setActiveReadingId(saved.id)
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   async function handleAnalyze() {
@@ -186,24 +300,11 @@ function App() {
     setError('')
     setResult('')
     setChartViews([])
+    setActiveReadingId('')
     setLoading(true)
 
-    const selfInput = {
-      name: self.name,
-      birthDate: self.birthDate,
-      birthTime: self.timeUnknown ? '' : self.birthTime,
-      gender: self.gender,
-      calendarType: self.calendarType,
-    }
-    const partnerInput = needsPartner
-      ? {
-          name: partner.name,
-          birthDate: partner.birthDate,
-          birthTime: partner.timeUnknown ? '' : partner.birthTime,
-          gender: partner.gender,
-          calendarType: partner.calendarType,
-        }
-      : null
+    const selfInput = toChartInput(self)
+    const partnerInput = needsPartner ? toChartInput(partner) : null
 
     try {
       const charts = buildChartBundle({
@@ -219,7 +320,9 @@ function App() {
       })
       const cached = localStorage.getItem(cacheKey)
       if (cached) {
-        setResult(cleanSajuText(cached))
+        const text = cleanSajuText(cached)
+        setResult(text)
+        await persistReading({ genreId, selfInput, partnerInput, text })
         return
       }
 
@@ -252,6 +355,7 @@ function App() {
       const text = cleanSajuText(rawText || '결과를 받지 못했습니다.')
       localStorage.setItem(cacheKey, text)
       setResult(text)
+      await persistReading({ genreId, selfInput, partnerInput, text })
     } catch (err) {
       console.error(err)
       setError(formatApiError(err))
@@ -282,86 +386,184 @@ function App() {
         </div>
       </nav>
 
+      <HistorySidebar
+        readings={readings}
+        activeId={activeReadingId}
+        onSelect={handleSelectReading}
+        onNew={handleNewReading}
+      />
+
       <main className="shell">
-        <header className="hero" key={genreId}>
-          <p className="brand">사주미</p>
-          <h1 className="headline">{genre.label}</h1>
-          <p className="sub-lead">{genre.headline}</p>
-          <p className="sub">{genre.description}</p>
-          <div className="genre-tags" aria-label="장르 태그">
-            {genre.tags.map((tag) => (
-              <span key={tag} className="genre-tag">
-                {tag}
-              </span>
-            ))}
+        {isViewing ? (
+          <div className="view-stack">
+            <header className="hero hero-view">
+              <p className="brand">사주미</p>
+              <h1 className="headline">
+                {self.name}
+                {needsPartner && partner.name ? ` · ${partner.name}` : ''}
+              </h1>
+              <p className="sub-lead">{genre.label}</p>
+              <p className="sub">{personByline(self)}</p>
+              {needsPartner && partner.name ? (
+                <p className="sub">{personByline(partner)}</p>
+              ) : null}
+              <div className="view-actions">
+                <button
+                  type="button"
+                  className="new-reading-btn"
+                  onClick={handleNewReading}
+                >
+                  새 사주 만들기
+                </button>
+                <button
+                  type="button"
+                  className="edit-reading-btn"
+                  onClick={handleEditReading}
+                >
+                  다시 입력하기
+                </button>
+              </div>
+            </header>
+
+            {chartViews.length > 0 && (
+              <section className="reading chart-reading">
+                <h2 className="reading-title">사주 명식</h2>
+                <div className="chart-cards">
+                  {chartViews.map((item) => (
+                    <SajuChartCard
+                      key={item.label || 'self'}
+                      label={item.label}
+                      view={item.view}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section className="reading result-reading">
+              <h2 className="reading-title">{genre.label} 해석</h2>
+              <p className="result-byline">
+                {personByline(self)}
+                {needsPartner && partner.name ? `  |  ${personByline(partner)}` : ''}
+              </p>
+              <div className="markdown result-md">
+                <Markdown>{result}</Markdown>
+              </div>
+              <div className="view-actions">
+                <button
+                  type="button"
+                  className="new-reading-btn"
+                  onClick={handleNewReading}
+                >
+                  새 사주 만들기
+                </button>
+                <button
+                  type="button"
+                  className="edit-reading-btn"
+                  onClick={handleEditReading}
+                >
+                  다시 입력하기
+                </button>
+              </div>
+            </section>
           </div>
-        </header>
+        ) : (
+          <>
+            <header className="hero">
+              <p className="brand">사주미</p>
+              <h1 className="headline">{genre.label}</h1>
+              <p className="sub-lead">{genre.headline}</p>
+              <p className="sub">{genre.description}</p>
+              <div className="genre-tags" aria-label="장르 태그">
+                {genre.tags.map((tag) => (
+                  <span key={tag} className="genre-tag">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </header>
 
-        <section className="panel" aria-label={`${genre.label} 입력`}>
-          <PersonForm
-            title={needsPartner ? '본인' : ''}
-            person={self}
-            onChange={setSelf}
-          />
+            <section className="panel" key={formKey} aria-label={`${genre.label} 입력`}>
+              <PersonForm
+                title={needsPartner ? '본인' : ''}
+                person={self}
+                onChange={setSelf}
+                nameRef={nameInputRef}
+              />
 
-          {needsPartner && (
-            <PersonForm
-              title="상대"
-              person={partner}
-              onChange={setPartner}
-            />
-          )}
-
-          <button
-            type="button"
-            className="analyze-btn"
-            onClick={handleAnalyze}
-            disabled={loading}
-          >
-            {loading ? '명식을 읽는 중…' : genre.buttonLabel}
-          </button>
-
-          {error && <p className="error">{error}</p>}
-        </section>
-
-        {loading && chartViews.length === 0 && (
-          <ReadingSkeleton
-            title="사주 명식"
-            lines={5}
-            status="만세력으로 명식을 계산하는 중…"
-          />
-        )}
-
-        {chartViews.length > 0 && (
-          <section className="reading chart-reading">
-            <h2 className="reading-title">사주 명식</h2>
-            <div className="chart-cards">
-              {chartViews.map((item) => (
-                <SajuChartCard
-                  key={item.label || 'self'}
-                  label={item.label}
-                  view={item.view}
+              {needsPartner && (
+                <PersonForm
+                  title="상대"
+                  person={partner}
+                  onChange={setPartner}
                 />
-              ))}
-            </div>
-          </section>
-        )}
+              )}
 
-        {loading && !result && (
-          <ReadingSkeleton
-            title={`${genre.label} 해석`}
-            lines={8}
-            status={`${genre.label} 해석을 작성하는 중…`}
-          />
-        )}
+              <button
+                type="button"
+                className="analyze-btn"
+                onClick={handleAnalyze}
+                disabled={loading}
+              >
+                {loading ? '명식을 읽는 중…' : genre.buttonLabel}
+              </button>
 
-        {result && (
-          <section className="reading result-reading">
-            <h2 className="reading-title">{genre.label} 해석</h2>
-            <div className="markdown result-md">
-              <Markdown>{result}</Markdown>
-            </div>
-          </section>
+              {error && <p className="error">{error}</p>}
+            </section>
+
+            {loading && chartViews.length === 0 && (
+              <ReadingSkeleton
+                title="사주 명식"
+                lines={5}
+                status="만세력으로 명식을 계산하는 중…"
+              />
+            )}
+
+            {chartViews.length > 0 && (
+              <section className="reading chart-reading">
+                <h2 className="reading-title">사주 명식</h2>
+                <div className="chart-cards">
+                  {chartViews.map((item) => (
+                    <SajuChartCard
+                      key={item.label || 'self'}
+                      label={item.label}
+                      view={item.view}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {loading && !result && (
+              <ReadingSkeleton
+                title={`${genre.label} 해석`}
+                lines={8}
+                status={`${genre.label} 해석을 작성하는 중…`}
+              />
+            )}
+
+            {result && (
+              <section className="reading result-reading">
+                <h2 className="reading-title">{genre.label} 해석</h2>
+                <p className="result-byline">
+                  {personByline(self)}
+                  {needsPartner && partner.name ? `  |  ${personByline(partner)}` : ''}
+                </p>
+                <div className="markdown result-md">
+                  <Markdown>{result}</Markdown>
+                </div>
+                <div className="view-actions">
+                  <button
+                    type="button"
+                    className="new-reading-btn"
+                    onClick={handleNewReading}
+                  >
+                    새 사주 만들기
+                  </button>
+                </div>
+              </section>
+            )}
+          </>
         )}
       </main>
     </div>
