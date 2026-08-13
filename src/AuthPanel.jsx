@@ -1,19 +1,42 @@
 import { useState } from 'react'
 import { displayUserName, signInWithGoogle, signOut } from './useAuth'
 
-export default function AuthPanel({ user, ready, onError }) {
+export function GoogleSignInButton({
+  label = 'Google로 로그인',
+  onError,
+  onBeforeSignIn,
+  redirectTo,
+  className = '',
+}) {
   const [busy, setBusy] = useState(false)
 
   async function handleSignIn() {
     setBusy(true)
     try {
-      await signInWithGoogle()
+      onBeforeSignIn?.()
+      await signInWithGoogle(redirectTo)
     } catch (err) {
       console.error(err)
       setBusy(false)
       onError?.('구글 로그인을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.')
     }
   }
+
+  return (
+    <button
+      type="button"
+      className={`google-btn ${className}`.trim()}
+      onClick={handleSignIn}
+      disabled={busy}
+    >
+      <GoogleMark />
+      {busy ? '구글로 이동 중…' : label}
+    </button>
+  )
+}
+
+export default function AuthPanel({ user, ready, profileName, onError, onEditProfile }) {
+  const [busy, setBusy] = useState(false)
 
   async function handleSignOut() {
     setBusy(true)
@@ -38,16 +61,8 @@ export default function AuthPanel({ user, ready, onError }) {
   if (!user) {
     return (
       <div className="auth-panel">
-        <button
-          type="button"
-          className="google-btn"
-          onClick={handleSignIn}
-          disabled={busy}
-        >
-          <GoogleMark />
-          {busy ? '구글로 이동 중…' : 'Google로 로그인'}
-        </button>
-        <p className="auth-hint">로그인하면 사주가 계정에 저장됩니다.</p>
+        <GoogleSignInButton onError={onError} />
+        <p className="auth-hint">평생운세는 바로 볼 수 있어요. 다른 장르는 로그인하면 열려요.</p>
       </div>
     )
   }
@@ -55,8 +70,13 @@ export default function AuthPanel({ user, ready, onError }) {
   return (
     <div className="auth-panel auth-panel-signed">
       <p className="auth-user" title={user.email || displayUserName(user)}>
-        {displayUserName(user)}
+        {profileName || displayUserName(user)}
       </p>
+      {onEditProfile && (
+        <button type="button" className="auth-signout" onClick={onEditProfile}>
+          프로필
+        </button>
+      )}
       <button
         type="button"
         className="auth-signout"

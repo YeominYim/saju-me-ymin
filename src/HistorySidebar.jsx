@@ -5,17 +5,25 @@ import { displayName } from './sajuReadings'
 export default function HistorySidebar({
   user,
   ready,
+  profileName,
   readings,
   activeId,
   onSelect,
   onNew,
   onDelete,
   onAuthError,
+  onEditProfile,
 }) {
   return (
     <aside className="history-sidebar" aria-label="저장된 사주">
       <h2 className="history-title">저장된 사주</h2>
-      <AuthPanel user={user} ready={ready} onError={onAuthError} />
+      <AuthPanel
+        user={user}
+        ready={ready}
+        profileName={profileName}
+        onError={onAuthError}
+        onEditProfile={onEditProfile}
+      />
       <button
         type="button"
         className={`history-new-btn ${activeId ? '' : 'is-active'}`}
@@ -26,7 +34,7 @@ export default function HistorySidebar({
       {!ready ? (
         <p className="history-empty">불러오는 중…</p>
       ) : !user ? (
-        <p className="history-empty">로그인하면 여기에 쌓입니다</p>
+        <p className="history-empty">로그인하면 기록이 여기에 쌓여요</p>
       ) : readings.length === 0 ? (
         <p className="history-empty">아직 없습니다</p>
       ) : (
@@ -38,14 +46,14 @@ export default function HistorySidebar({
                 className={`history-item ${row.id === activeId ? 'is-active' : ''}`}
                 onClick={() => onSelect(row)}
               >
-                <span className="history-name">{displayName(row)}</span>
+                <span className="history-name">{displayName(row, profileName)}</span>
                 <span className="history-genre">{getGenre(row.genre_id).label}</span>
               </button>
               <button
                 type="button"
                 className="history-delete"
                 onClick={() => onDelete(row)}
-                aria-label={`${displayName(row)} 삭제`}
+                aria-label={`${displayName(row, profileName)} 삭제`}
               >
                 삭제
               </button>

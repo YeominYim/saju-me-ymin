@@ -13,8 +13,8 @@ body {
   font-family: "Gowun Batang", serif;
   font-weight: 400;
   font-style: normal;
-  background: #0c1210;
-  color: #d7e0da;
+  background: #f7f1e6;
+  color: #1c2744;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -28,5 +28,5 @@ body {
 input,
 select,
 button {
-  color-scheme: dark;
+  color-scheme: light;
 }

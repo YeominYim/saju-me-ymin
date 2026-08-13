@@ -1,56 +1,32 @@
 import { supabase } from './supabaseClient'
+import { toTimeInput, toTimeValue } from './person'
 
-function toTimeInput(value) {
-  if (!value) return ''
-  return String(value).slice(0, 5)
+export function displayName(row, fallbackName = '') {
+  const selfName = row.profiles?.name || fallbackName || '나'
+  if (row.partner_name) return `${selfName} · ${row.partner_name}`
+  return selfName
 }
 
-function toTimeValue(person) {
-  if (!person || person.timeUnknown || !person.birthTime) return null
-  return person.birthTime
-}
-
-export function displayName(row) {
-  if (row.partner_name) return `${row.name} · ${row.partner_name}`
-  return row.name
-}
-
-export function rowToPeople(row) {
-  const self = {
-    name: row.name || '',
-    birthDate: row.birth_date || '',
-    birthTime: row.time_unknown ? '' : toTimeInput(row.birth_time),
-    timeUnknown: Boolean(row.time_unknown),
-    gender: row.gender || '',
-    calendarType: row.calendar_type || '',
+export function rowToPartner(row) {
+  if (!row?.partner_name) return null
+  return {
+    name: row.partner_name,
+    birthDate: row.partner_birth_date || '',
+    birthTime: row.partner_time_unknown ? '' : toTimeInput(row.partner_birth_time),
+    timeUnknown: Boolean(row.partner_time_unknown),
+    gender: row.partner_gender || '',
+    calendarType: row.partner_calendar_type || '',
   }
-
-  const partner = row.partner_name
-    ? {
-        name: row.partner_name,
-        birthDate: row.partner_birth_date || '',
-        birthTime: row.partner_time_unknown
-          ? ''
-          : toTimeInput(row.partner_birth_time),
-        timeUnknown: Boolean(row.partner_time_unknown),
-        gender: row.partner_gender || '',
-        calendarType: row.partner_calendar_type || '',
-      }
-    : null
-
-  return { self, partner }
 }
 
-function toReadingPayload({ genreId, self, partner, resultText, userId }) {
+const PROFILE_SELECT =
+  '*, profiles(name, birth_date, birth_time, time_unknown, gender, calendar_type)'
+
+function toReadingPayload({ genreId, partner, resultText, userId, profileId }) {
   return {
     user_id: userId,
+    profile_id: profileId || null,
     genre_id: genreId,
-    name: self.name,
-    birth_date: self.birthDate,
-    birth_time: toTimeValue(self),
-    time_unknown: Boolean(self.timeUnknown),
-    gender: self.gender,
-    calendar_type: self.calendarType,
     partner_name: partner?.name || null,
     partner_birth_date: partner?.birthDate || null,
     partner_birth_time: toTimeValue(partner),
@@ -67,7 +43,7 @@ export async function fetchSajuReadings(userId) {
 
   const { data, error } = await supabase
     .from('saju_readings')
-    .select('*')
+    .select(PROFILE_SELECT)
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
 
@@ -75,19 +51,29 @@ export async function fetchSajuReadings(userId) {
   return data || []
 }
 
+export async function fetchSajuReadingCount() {
+  if (!supabase) return null
+
+  const { data, error } = await supabase.rpc('count_saju_readings')
+  if (error) throw error
+
+  const count = Number(data)
+  return Number.isFinite(count) ? count : null
+}
+
 export async function saveSajuReading({
   genreId,
-  self,
   partner,
   resultText,
   userId,
+  profileId,
 }) {
   if (!supabase || !userId) return null
 
   const { data, error } = await supabase
     .from('saju_readings')
-    .insert(toReadingPayload({ genreId, self, partner, resultText, userId }))
-    .select()
+    .insert(toReadingPayload({ genreId, partner, resultText, userId, profileId }))
+    .select(PROFILE_SELECT)
     .single()
 
   if (error) throw error
@@ -97,19 +83,19 @@ export async function saveSajuReading({
 export async function updateSajuReading({
   id,
   genreId,
-  self,
   partner,
   resultText,
   userId,
+  profileId,
 }) {
   if (!supabase || !id || !userId) return null
 
   const { data, error } = await supabase
     .from('saju_readings')
-    .update(toReadingPayload({ genreId, self, partner, resultText, userId }))
+    .update(toReadingPayload({ genreId, partner, resultText, userId, profileId }))
     .eq('id', id)
     .eq('user_id', userId)
-    .select()
+    .select(PROFILE_SELECT)
     .single()
 
   if (error) throw error

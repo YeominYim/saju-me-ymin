@@ -12,6 +12,7 @@ export const GENRES = [
     tags: ['#기질', '#흐름', '#연애', '#재물'],
     buttonLabel: '평생운세 보기',
     needsPartner: false,
+    requiresAuth: false,
     depth: 'overview',
     focus: `질문: 이 사람의 평생운세를 전반적으로, 그러나 깊게 들어가지 않고 핵심만 정리해 주세요.
 사주 용어에 익숙하지 않다고 가정하고 쉽고 명확하게.
@@ -45,6 +46,7 @@ export const GENRES = [
     tags: ['#재물', '#사업', '#운영'],
     buttonLabel: '재물운 자세히 보기',
     needsPartner: false,
+    requiresAuth: true,
     depth: 'deep',
     focus: `질문: 재물·사업 관점에서 이 사람을 깊게 분석해 주세요.
 1) 돈을 버는 방식에 맞는 결 (근로/사업/전문성 등 기운)
@@ -66,6 +68,7 @@ export const GENRES = [
     tags: ['#건강', '#체질', '#컨디션'],
     buttonLabel: '건강운 자세히 보기',
     needsPartner: false,
+    requiresAuth: true,
     depth: 'deep',
     focus: `질문: 건강·컨디션 관점에서 이 사람을 깊게 분석해 주세요.
 의학적 진단·처방·병명 단정은 하지 마라. 사주 기운과 생활 패턴 힌트만 말하라.
@@ -99,6 +102,7 @@ export const GENRES = [
     tags: ['#연애', '#호감', '#짝사랑'],
     buttonLabel: '연애운 자세히 보기',
     needsPartner: false,
+    requiresAuth: true,
     depth: 'deep',
     focus: `질문: 연애·짝사랑·호감 관점에서 이 사람을 깊게 분석해 주세요.
 상대 생년월일은 없다. 본인 명식만으로.
@@ -121,6 +125,7 @@ export const GENRES = [
     tags: ['#궁합', '#관계', '#보완'],
     buttonLabel: '궁합 보기',
     needsPartner: true,
+    requiresAuth: true,
     depth: 'deep',
     focus: `질문: 아래 두 사람의 궁합을 자세히 분석해 주세요.
 반드시 제공된 두 명식만 근거로 하라. 없는 정보를 만들지 마라.
@@ -154,6 +159,7 @@ export const GENRES = [
     tags: ['#학업', '#시험', '#집중'],
     buttonLabel: '학업운 자세히 보기',
     needsPartner: false,
+    requiresAuth: true,
     depth: 'deep',
     focus: `질문: 학업·시험 관점에서 이 사람을 깊게 분석해 주세요.
 
@@ -187,6 +193,7 @@ export const GENRES = [
     tags: ['#취업', '#직무', '#커리어'],
     buttonLabel: '취업운 자세히 보기',
     needsPartner: false,
+    requiresAuth: true,
     depth: 'deep',
     focus: `질문: 취업·커리어 관점에서 이 사람을 깊게 분석해 주세요.
 반드시 아래 순서로 작성하라.

@@ -4,32 +4,53 @@ import { buildSajuPrompt, cleanSajuText } from './buildSajuPrompt'
 import { buildChartBundle, makeCacheKey } from './sajuChart'
 import { DEFAULT_GENRE_ID, GENRES, getGenre } from './genres'
 import SajuChartCard from './SajuChartCard'
+import SajuGirl from './SajuGirl'
+import sajuGirlLoading from './assets/saju-girl-loading.png'
 import HistorySidebar from './HistorySidebar'
+import PersonForm from './PersonForm'
+import ProfileModal from './ProfileModal'
+import ProfilePickerModal from './ProfilePickerModal'
+import ShareModal from './ShareModal'
+import { GoogleSignInButton } from './AuthPanel'
 import { formatApiError, generateSajuText, hasGeminiKey } from './gemini'
-import { fetchSajuReadings, rowToPeople, saveSajuReading, updateSajuReading, deleteSajuReading } from './sajuReadings'
+import {
+  buildShareSnapshot,
+  deleteSajuShare,
+  upsertSajuShare,
+} from './share'
+import { fetchSajuReadingCount, fetchSajuReadings, rowToPartner, saveSajuReading, updateSajuReading, deleteSajuReading } from './sajuReadings'
+import { fetchProfiles, saveProfile } from './userProfile'
+import { clearGuestResult, clearPendingGenre, loadGuestResult, peekPendingGenre, saveGuestResult, savePendingGenre, splitPreviewText } from './guestResult'
 import { useAuth } from './useAuth'
+import {
+  calendarLabel,
+  emptyPerson,
+  genderLabel,
+  isPersonComplete,
+  personByline,
+  rowToPerson,
+  toChartInput,
+  validatePerson,
+} from './person'
 import './App.css'
 
-const genderLabel = { male: '남자', female: '여자' }
-const calendarLabel = { solar: '양력', lunar: '음력' }
+function Toast({ notice }) {
+  const [message, setMessage] = useState('')
 
-const emptyPerson = {
-  name: '',
-  birthDate: '',
-  birthTime: '',
-  timeUnknown: false,
-  gender: '',
-  calendarType: '',
-}
+  useEffect(() => {
+    if (!notice?.message) return
+    setMessage(notice.message)
+    const timer = window.setTimeout(() => setMessage(''), 2400)
+    return () => window.clearTimeout(timer)
+  }, [notice])
 
-function validatePerson(person, label) {
-  if (!person.name || !person.birthDate || !person.gender || !person.calendarType) {
-    return `${label}의 이름, 성별, 양력/음력, 생년월일을 입력해 주세요.`
-  }
-  if (!person.timeUnknown && !person.birthTime) {
-    return `${label}의 태어난 시간을 입력하거나, 시간 모름을 선택해 주세요.`
-  }
-  return ''
+  if (!message) return null
+
+  return (
+    <div className="toast" role="status" aria-live="polite">
+      {message}
+    </div>
+  )
 }
 
 function ReadingSkeleton({ title, lines = 6, status = '잠시만 기다려 주세요…' }) {
@@ -49,127 +70,145 @@ function ReadingSkeleton({ title, lines = 6, status = '잠시만 기다려 주�
   )
 }
 
-function PersonForm({ title, person, onChange, nameRef }) {
-  function patch(partial) {
-    onChange({ ...person, ...partial })
-  }
+function InterpretingScene({ title }) {
+  return (
+    <section className="reading interpreting" aria-busy="true" aria-live="polite">
+      <h2 className="reading-title">{title}</h2>
+      <figure className="interpreting-girl">
+        <img src={sajuGirlLoading} alt="사주미 소녀가 명식을 읽는 중" />
+        <figcaption>조금만 기다려 주세요! 지금 명식을 읽고 있어요.</figcaption>
+      </figure>
+    </section>
+  )
+}
 
-  function handleTimeChange(value) {
-    patch({ birthTime: value, timeUnknown: value ? false : person.timeUnknown })
-  }
-
-  function handleTimeUnknown() {
-    const next = !person.timeUnknown
-    patch({
-      timeUnknown: next,
-      birthTime: next ? '' : person.birthTime,
-    })
-  }
+function ResultReading({
+  genre,
+  self,
+  partner,
+  needsPartner,
+  result,
+  locked,
+  onAuthError,
+  children,
+}) {
+  const text = locked ? splitPreviewText(result) : result
 
   return (
-    <div className="person-block">
-      {title && <h3 className="person-title">{title}</h3>}
-      <div className="form-grid">
-        <div className="form-row form-row-identity">
-          <label className="field field-name">
-            <span>이름</span>
-            <input
-              ref={nameRef}
-              type="text"
-              value={person.name}
-              onChange={(e) => patch({ name: e.target.value })}
-              placeholder="이름을 입력하세요"
-            />
-          </label>
-
-          <label className="field field-gender">
-            <span>성별</span>
-            <select
-              value={person.gender}
-              onChange={(e) => patch({ gender: e.target.value })}
-            >
-              <option value="">선택하세요</option>
-              <option value="male">남자</option>
-              <option value="female">여자</option>
-            </select>
-          </label>
-        </div>
-
-        <div className="form-row form-row-birth">
-          <label className="field">
-            <span>양력 / 음력</span>
-            <select
-              value={person.calendarType}
-              onChange={(e) => patch({ calendarType: e.target.value })}
-            >
-              <option value="">선택하세요</option>
-              <option value="solar">양력</option>
-              <option value="lunar">음력</option>
-            </select>
-          </label>
-
-          <label className="field field-date">
-            <span>생년월일</span>
-            <div className="control">
-              <input
-                type="date"
-                value={person.birthDate}
-                onChange={(e) => patch({ birthDate: e.target.value })}
-              />
-            </div>
-          </label>
-
-          <div className="field field-time">
-            <span>태어난 시간</span>
-            <div className="time-group">
-              <div className={`control ${person.timeUnknown ? 'is-disabled' : ''}`}>
-                <input
-                  type="time"
-                  value={person.birthTime}
-                  onChange={(e) => handleTimeChange(e.target.value)}
-                  disabled={person.timeUnknown}
-                  aria-label={`${title || '본인'} 태어난 시간`}
-                />
-              </div>
-              <button
-                type="button"
-                className={`time-unknown-btn ${person.timeUnknown ? 'is-active' : ''}`}
-                onClick={handleTimeUnknown}
-                aria-pressed={person.timeUnknown}
-              >
-                시간 모름
-              </button>
-            </div>
-          </div>
-        </div>
+    <section className="reading result-reading">
+      <div className="result-head">
+        <SajuGirl size="sm" />
+        <p className="result-voice">
+          {locked
+            ? '앞부분은 먼저 말해 줄게요! 나머지는 로그인하면 이어서 들려줄게요.'
+            : '자, 다 읽었어요! 감정은 빼고, 확실한 것만 말해 줄게요.'}
+        </p>
       </div>
+      <h2 className="reading-title">{genre.label} 해석</h2>
+      <p className="result-byline">
+        {personByline(self)}
+        {needsPartner && partner.name ? `  |  ${personByline(partner)}` : ''}
+      </p>
+      <div className={`markdown result-md ${locked ? 'is-preview' : ''}`}>
+        <Markdown>{text}</Markdown>
+      </div>
+      {locked && (
+        <div className="result-gate">
+          <p className="result-gate-kicker">이어서 읽기</p>
+          <p className="result-gate-title">나머지 해석은 로그인하면 열려요!</p>
+          <p className="result-gate-lead">
+            지금 본 흐름 다음에, 더 분명한 결이 남아 있어요.
+          </p>
+          <GoogleSignInButton
+            label="Google로 로그인하고 이어서 보기"
+            onError={onAuthError}
+          />
+        </div>
+      )}
+      {children}
+    </section>
+  )
+}
+
+function GenreLockIcon() {
+  return (
+    <svg className="genre-lock" viewBox="0 0 24 24" width="11" height="11" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M17 8h-1V6a4 4 0 10-8 0v2H7a2 2 0 00-2 2v8a2 2 0 002 2h10a2 2 0 002-2v-8a2 2 0 00-2-2zM10 6a2 2 0 114 0v2h-4V6zm7 12H7v-8h10v8z"
+      />
+    </svg>
+  )
+}
+
+function GenreAuthGate({ genre, onAuthError, onSeeLife }) {
+  const redirectTo = `${window.location.origin}/?genre=${genre.id}`
+
+  return (
+    <div className="genre-auth-gate">
+      <p className="result-gate-kicker">로그인하고 더 깊게</p>
+      <p className="result-gate-title">{genre.label}은 로그인이 필요해요</p>
+      <p className="result-gate-lead">
+        평생운세는 바로 볼 수 있어요. {genre.label}은 Google로 로그인하면 자세히 풀어 드려요.
+      </p>
+      <GoogleSignInButton
+        label={`Google로 로그인하고 ${genre.label} 보기`}
+        redirectTo={redirectTo}
+        onBeforeSignIn={() => savePendingGenre(genre.id)}
+        onError={onAuthError}
+      />
+      {onSeeLife && (
+        <button type="button" className="profile-edit-link" onClick={onSeeLife}>
+          먼저 평생운세 보기
+        </button>
+      )}
     </div>
   )
 }
 
-function toChartInput(person) {
-  return {
-    name: person.name,
-    birthDate: person.birthDate,
-    birthTime: person.timeUnknown ? '' : person.birthTime,
-    gender: person.gender,
-    calendarType: person.calendarType,
-  }
+function GuestUpgrade({ onAuthError }) {
+  return (
+    <div className="guest-upgrade">
+      <p className="guest-upgrade-lead">
+        재물운, 연애운, 궁합은 로그인하면 더 깊게 볼 수 있어요.
+      </p>
+      <GoogleSignInButton
+        label="Google로 로그인하고 더 보기"
+        onError={onAuthError}
+      />
+    </div>
+  )
 }
 
-function personByline(person) {
-  if (!person?.name) return ''
-  const gender = genderLabel[person.gender] || ''
-  const calendar = calendarLabel[person.calendarType] || ''
-  const birth = person.birthDate || ''
-  const time = person.timeUnknown ? '시간 모름' : person.birthTime
-  return [person.name, gender, [calendar, birth].filter(Boolean).join(' '), time]
-    .filter(Boolean)
-    .join(' · ')
+function ProfileSummary({ person, title, onEdit, onChangeProfile }) {
+  return (
+    <div className="profile-summary">
+      <div className="profile-summary-top">
+        {title ? <h3 className="person-title">{title}</h3> : <span />}
+        <div className="profile-summary-actions">
+          {onChangeProfile && (
+            <button type="button" className="profile-edit-link" onClick={onChangeProfile}>
+              프로필 바꾸기
+            </button>
+          )}
+          <button type="button" className="profile-edit-link" onClick={onEdit}>
+            수정
+          </button>
+        </div>
+      </div>
+      <p className="profile-summary-name">{person.name}</p>
+      <p className="profile-summary-byline">{personByline(person)}</p>
+    </div>
+  )
+}
+
+function genreIdFromSearch() {
+  const id = new URLSearchParams(window.location.search).get('genre') || peekPendingGenre()
+  return GENRES.some((item) => item.id === id) ? id : DEFAULT_GENRE_ID
 }
 
 function App() {
-  const [genreId, setGenreId] = useState(DEFAULT_GENRE_ID)
+  const [genreId, setGenreId] = useState(genreIdFromSearch)
   const [self, setSelf] = useState(emptyPerson)
   const [partner, setPartner] = useState(emptyPerson)
   const [chartViews, setChartViews] = useState([])
@@ -180,12 +219,29 @@ function App() {
   const [activeReadingId, setActiveReadingId] = useState('')
   const [editingId, setEditingId] = useState('')
   const [formKey, setFormKey] = useState(0)
+  const [profileReady, setProfileReady] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [profileMode, setProfileMode] = useState('edit')
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [profiles, setProfiles] = useState([])
+  const [selectedProfileId, setSelectedProfileId] = useState('')
+  const [toast, setToast] = useState(null)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shareId, setShareId] = useState('')
+  const [sharing, setSharing] = useState(false)
+  const [readingCount, setReadingCount] = useState(null)
   const nameInputRef = useRef(null)
+  const formPanelRef = useRef(null)
+  const guestShareRef = useRef({ key: '', id: '' })
   const { user, ready, authError } = useAuth()
 
   const genre = getGenre(genreId)
   const needsPartner = genre.needsPartner
+  const requiresAuth = Boolean(genre.requiresAuth)
+  const resultLocked = Boolean(!user && requiresAuth)
   const isViewing = Boolean(activeReadingId && result && !loading)
+  const profileComplete = isPersonComplete(self)
+  const usesSavedProfile = Boolean(user && selectedProfileId && profileComplete)
 
   useEffect(() => {
     if (authError) setError(authError)
@@ -194,17 +250,137 @@ function App() {
   useEffect(() => {
     let cancelled = false
 
-    if (!user) {
-      setReadings([])
-      return
-    }
-
-    fetchSajuReadings(user.id)
-      .then((rows) => {
-        if (!cancelled) setReadings(rows)
+    fetchSajuReadingCount()
+      .then((count) => {
+        if (!cancelled && count != null) setReadingCount(count)
       })
       .catch((err) => {
         console.error(err)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (!user) {
+      setReadings([])
+      setProfiles([])
+      setSelectedProfileId('')
+      setProfileReady(true)
+      setProfileOpen(false)
+      setPickerOpen(false)
+      return
+    }
+
+    setProfileReady(false)
+    const guest = loadGuestResult()
+
+    Promise.all([fetchProfiles(user.id), fetchSajuReadings(user.id)])
+      .then(async ([rows, readingsRows]) => {
+        if (cancelled) return
+        setReadings(readingsRows)
+
+        if (guest?.result && guest.self) {
+          const guestGenreId = guest.genreId || DEFAULT_GENRE_ID
+          const wantedGenreId = genreIdFromSearch()
+          const jumpToWanted = wantedGenreId !== guestGenreId
+          const partnerPerson = guest.partner || emptyPerson
+          const selfInput = toChartInput(guest.self)
+          const partnerInput = isPersonComplete(partnerPerson)
+            ? toChartInput(partnerPerson)
+            : null
+
+          setSelf(guest.self)
+          setPartner(partnerPerson)
+
+          if (jumpToWanted) {
+            setGenreId(wantedGenreId)
+            setResult('')
+            setChartViews([])
+            setActiveReadingId('')
+          } else {
+            setGenreId(guestGenreId)
+            setResult(guest.result)
+            setChartViews(
+              buildChartBundle({ self: selfInput, partner: partnerInput }).views,
+            )
+          }
+
+          let profileRow = rows[0] || null
+          if (!profileRow && isPersonComplete(guest.self)) {
+            profileRow = await saveProfile(user.id, guest.self, '')
+            if (cancelled) return
+            setProfiles([profileRow])
+          } else {
+            setProfiles(rows)
+          }
+
+          if (profileRow) {
+            setSelectedProfileId(profileRow.id)
+            try {
+              const saved = await saveSajuReading({
+                genreId: guestGenreId,
+                userId: user.id,
+                profileId: profileRow.id,
+                partner: partnerInput
+                  ? {
+                      ...partnerInput,
+                      timeUnknown: partnerPerson.timeUnknown,
+                    }
+                  : null,
+                resultText: guest.result,
+              })
+              if (saved && !cancelled) {
+                setReadings((prev) => [
+                  saved,
+                  ...prev.filter((row) => row.id !== saved.id),
+                ])
+                if (!jumpToWanted) setActiveReadingId(saved.id)
+                setReadingCount((prev) => (typeof prev === 'number' ? prev + 1 : prev))
+              }
+            } catch (err) {
+              console.error(err)
+            }
+          }
+
+          clearGuestResult()
+          clearPendingGenre()
+          setProfileOpen(false)
+          return
+        }
+
+        setProfiles(rows)
+        const first = rows[0] || null
+        const person = rowToPerson(first)
+        const suggestedName =
+          person.name ||
+          user.user_metadata?.full_name ||
+          user.user_metadata?.name ||
+          ''
+        const nextSelf = { ...person, name: suggestedName }
+        setSelf(nextSelf)
+        setSelectedProfileId(first?.id || '')
+        if (!rows.length) {
+          setProfileMode('required')
+          setProfileOpen(true)
+        }
+      })
+      .catch((err) => {
+        console.error(err)
+        if (!cancelled) {
+          setError('프로필을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.')
+          if (!loadGuestResult()) {
+            setProfileMode('required')
+            setProfileOpen(true)
+          }
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setProfileReady(true)
       })
 
     return () => {
@@ -227,7 +403,8 @@ function App() {
       return
     }
 
-    const { self: nextSelf, partner: nextPartner } = rowToPeople(row)
+    const nextPartner = rowToPartner(row)
+    const nextSelf = row.profiles ? rowToPerson(row.profiles) : self
     const selfInput = toChartInput(nextSelf)
     const partnerInput = nextPartner ? toChartInput(nextPartner) : null
     const charts = buildChartBundle({
@@ -237,6 +414,7 @@ function App() {
 
     setGenreId(row.genre_id)
     setSelf(nextSelf)
+    if (row.profile_id) setSelectedProfileId(row.profile_id)
     setPartner(nextPartner || emptyPerson)
     setChartViews(charts.views)
     setResult(cleanSajuText(row.result_text || ''))
@@ -246,8 +424,63 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  function handleNewReading() {
-    setSelf({ ...emptyPerson })
+  function showToast(message) {
+    setToast({ id: Date.now(), message })
+  }
+
+  async function handleShare() {
+    if (!result || sharing) return
+
+    const snapshot = buildShareSnapshot({
+      genreId,
+      self,
+      partner: needsPartner ? partner : null,
+      result,
+      chartViews,
+    })
+    const guestKey = `${genreId}|${self.name}|${partner.name}|${result}`
+
+    if (!user && guestShareRef.current.key === guestKey && guestShareRef.current.id) {
+      setShareId(guestShareRef.current.id)
+      setShareOpen(true)
+      return
+    }
+
+    setSharing(true)
+    try {
+      const id = await upsertSajuShare({
+        userId: user?.id || '',
+        readingId: activeReadingId || editingId || '',
+        snapshot,
+      })
+      if (!user) guestShareRef.current = { key: guestKey, id }
+      setShareId(id)
+      setShareOpen(true)
+    } catch (err) {
+      console.error(err)
+      showToast('공유 링크를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  async function handleRevokeShare() {
+    if (!shareId) return
+    await deleteSajuShare(shareId)
+    guestShareRef.current = { key: '', id: '' }
+    setShareId('')
+    setShareOpen(false)
+    showToast('공유를 취소했어요.')
+  }
+
+  function focusNewReadingForm() {
+    window.setTimeout(() => {
+      formPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      nameInputRef.current?.focus()
+    }, 80)
+  }
+
+  function resetToNewForm() {
     setPartner({ ...emptyPerson })
     setChartViews([])
     setResult('')
@@ -256,7 +489,38 @@ function App() {
     setEditingId('')
     setFormKey((key) => key + 1)
     window.scrollTo({ top: 0, behavior: 'smooth' })
-    window.setTimeout(() => nameInputRef.current?.focus(), 120)
+    focusNewReadingForm()
+  }
+
+  function applyProfile(row) {
+    setSelectedProfileId(row.id)
+    setSelf(rowToPerson(row))
+    resetToNewForm()
+  }
+
+  function handleNewReading() {
+    if (loading) {
+      showToast('지금은 명식을 읽고 있어요!')
+      return
+    }
+
+    if (user) {
+      if (profiles.length) {
+        setPickerOpen(true)
+        return
+      }
+      setProfileMode('required')
+      setProfileOpen(true)
+      return
+    }
+
+    resetToNewForm()
+  }
+
+  function openCreateProfile() {
+    setPickerOpen(false)
+    setProfileMode(profiles.length ? 'create' : 'required')
+    setProfileOpen(true)
   }
 
   function handleEditReading() {
@@ -271,14 +535,16 @@ function App() {
   async function handleDeleteReading(row) {
     const id = row?.id
     if (!id) return
-    const label = row.name || '이 사주'
+    const label = row.partner_name
+      ? `${self.name || '나'} · ${row.partner_name}`
+      : self.name || '이 사주'
     if (!window.confirm(`‘${label}’ 사주를 삭제할까요?`)) return
 
     try {
       await deleteSajuReading(id)
       setReadings((prev) => prev.filter((item) => item.id !== id))
       if (activeReadingId === id || editingId === id) {
-        handleNewReading()
+        resetToNewForm()
       }
     } catch (err) {
       console.error(err)
@@ -286,17 +552,34 @@ function App() {
     }
   }
 
-  async function persistReading({ genreId: nextGenreId, selfInput, partnerInput, text }) {
+  async function handleSaveProfile(person) {
     if (!user) return
+    const creating = profileMode === 'create' || profileMode === 'required'
+    const saved = await saveProfile(
+      user.id,
+      person,
+      creating ? '' : selectedProfileId,
+    )
+    const nextSelf = rowToPerson(saved)
+    setSelf(nextSelf)
+    setSelectedProfileId(saved.id)
+    setProfiles((prev) => {
+      const others = prev.filter((row) => row.id !== saved.id)
+      return creating ? [...others, saved] : prev.map((row) => (row.id === saved.id ? saved : row))
+    })
+    setProfileOpen(false)
+    setError('')
+    if (creating) resetToNewForm()
+  }
+
+  async function persistReading({ genreId: nextGenreId, partnerInput, text }) {
+    if (!user || !profileComplete || !selectedProfileId) return
 
     try {
       const payload = {
         genreId: nextGenreId,
         userId: user.id,
-        self: {
-          ...selfInput,
-          timeUnknown: self.timeUnknown,
-        },
+        profileId: selectedProfileId,
         partner: partnerInput
           ? {
               ...partnerInput,
@@ -315,6 +598,9 @@ function App() {
         ])
         setEditingId('')
         setActiveReadingId(saved.id)
+        if (!editingId) {
+          setReadingCount((prev) => (typeof prev === 'number' ? prev + 1 : prev))
+        }
         window.scrollTo({ top: 0, behavior: 'smooth' })
       }
     } catch (err) {
@@ -328,6 +614,17 @@ function App() {
   }
 
   async function handleAnalyze() {
+    if (!user && requiresAuth) {
+      formPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
+
+    if (user && !profileComplete) {
+      setProfileMode(profiles.length ? 'edit' : 'required')
+      setProfileOpen(true)
+      return
+    }
+
     const selfError = validatePerson(self, '본인')
     if (selfError) {
       setError(selfError)
@@ -372,7 +669,15 @@ function App() {
       if (cached) {
         const text = cleanSajuText(cached)
         setResult(text)
-        await persistReading({ genreId, selfInput, partnerInput, text })
+        if (!user) {
+          saveGuestResult({
+            genreId,
+            self,
+            partner: needsPartner ? partner : emptyPerson,
+            result: text,
+          })
+        }
+        await persistReading({ genreId, partnerInput, text })
         return
       }
 
@@ -405,7 +710,15 @@ function App() {
       const text = cleanSajuText(rawText || '결과를 받지 못했습니다.')
       localStorage.setItem(cacheKey, text)
       setResult(text)
-      await persistReading({ genreId, selfInput, partnerInput, text })
+      if (!user) {
+        saveGuestResult({
+          genreId,
+          self,
+          partner: needsPartner ? partner : emptyPerson,
+          result: text,
+        })
+      }
+      await persistReading({ genreId, partnerInput, text })
     } catch (err) {
       console.error(err)
       setError(formatApiError(err))
@@ -426,11 +739,12 @@ function App() {
             <button
               key={item.id}
               type="button"
-              className={`genre-tab ${item.id === genreId ? 'is-active' : ''}`}
+              className={`genre-tab ${item.id === genreId ? 'is-active' : ''} ${item.requiresAuth && !user ? 'is-locked' : ''}`}
               onClick={() => handleGenreChange(item.id)}
               aria-pressed={item.id === genreId}
             >
               {item.label}
+              {item.requiresAuth && !user ? <GenreLockIcon /> : null}
             </button>
           ))}
         </div>
@@ -439,29 +753,43 @@ function App() {
       <HistorySidebar
         user={user}
         ready={ready}
+        profileName={self.name}
         readings={readings}
         activeId={activeReadingId || editingId}
         onSelect={handleSelectReading}
         onNew={handleNewReading}
         onDelete={handleDeleteReading}
         onAuthError={setError}
+        onEditProfile={() => {
+          setPickerOpen(true)
+        }}
       />
 
       <main className="shell">
         {isViewing ? (
           <div className="view-stack">
             <header className="hero hero-view">
-              <p className="brand">사주미</p>
-              <h1 className="headline">
-                {self.name}
-                {needsPartner && partner.name ? ` · ${partner.name}` : ''}
-              </h1>
-              <p className="sub-lead">{genre.label}</p>
-              <p className="sub">{personByline(self)}</p>
-              {needsPartner && partner.name ? (
-                <p className="sub">{personByline(partner)}</p>
-              ) : null}
+              <div className="hero-copy">
+                <p className="brand">사주미</p>
+                <h1 className="headline">
+                  {self.name}
+                  {needsPartner && partner.name ? ` · ${partner.name}` : ''}
+                </h1>
+                <p className="sub-lead">{genre.label}</p>
+                <p className="sub">{personByline(self)}</p>
+                {needsPartner && partner.name ? (
+                  <p className="sub">{personByline(partner)}</p>
+                ) : null}
+              </div>
               <div className="view-actions">
+                <button
+                  type="button"
+                  className="share-reading-btn"
+                  onClick={handleShare}
+                  disabled={sharing}
+                >
+                  {sharing ? '링크 만드는 중…' : '친구에게 공유'}
+                </button>
                 <button
                   type="button"
                   className="new-reading-btn"
@@ -474,7 +802,7 @@ function App() {
                   className="edit-reading-btn"
                   onClick={handleEditReading}
                 >
-                  다시 입력하기
+                  {needsPartner ? '상대 다시 입력' : '다시 보기'}
                 </button>
                 <button
                   type="button"
@@ -482,7 +810,7 @@ function App() {
                   onClick={() =>
                     handleDeleteReading({
                       id: activeReadingId,
-                      name: self.name,
+                      partner_name: partner.name,
                     })
                   }
                 >
@@ -506,16 +834,24 @@ function App() {
               </section>
             )}
 
-            <section className="reading result-reading">
-              <h2 className="reading-title">{genre.label} 해석</h2>
-              <p className="result-byline">
-                {personByline(self)}
-                {needsPartner && partner.name ? `  |  ${personByline(partner)}` : ''}
-              </p>
-              <div className="markdown result-md">
-                <Markdown>{result}</Markdown>
-              </div>
+            <ResultReading
+              genre={genre}
+              self={self}
+              partner={partner}
+              needsPartner={needsPartner}
+              result={result}
+              locked={resultLocked}
+              onAuthError={setError}
+            >
               <div className="view-actions">
+                <button
+                  type="button"
+                  className="share-reading-btn"
+                  onClick={handleShare}
+                  disabled={sharing}
+                >
+                  {sharing ? '링크 만드는 중…' : '친구에게 공유'}
+                </button>
                 <button
                   type="button"
                   className="new-reading-btn"
@@ -523,54 +859,85 @@ function App() {
                 >
                   새 사주 만들기
                 </button>
-                <button
-                  type="button"
-                  className="edit-reading-btn"
-                  onClick={handleEditReading}
-                >
-                  다시 입력하기
-                </button>
-                <button
-                  type="button"
-                  className="delete-reading-btn"
-                  onClick={() =>
-                    handleDeleteReading({
-                      id: activeReadingId,
-                      name: self.name,
-                    })
-                  }
-                >
-                  삭제
-                </button>
+                {user && (
+                  <>
+                    <button
+                      type="button"
+                      className="edit-reading-btn"
+                      onClick={handleEditReading}
+                    >
+                      {needsPartner ? '상대 다시 입력' : '다시 보기'}
+                    </button>
+                    <button
+                      type="button"
+                      className="delete-reading-btn"
+                      onClick={() =>
+                        handleDeleteReading({
+                          id: activeReadingId,
+                          partner_name: partner.name,
+                        })
+                      }
+                    >
+                      삭제
+                    </button>
+                  </>
+                )}
               </div>
-            </section>
+            </ResultReading>
           </div>
         ) : (
           <>
             <header className="hero">
-              <p className="brand">사주미</p>
-              <h1 className="headline">{genre.label}</h1>
-              <p className="sub-lead">{genre.headline}</p>
-              <p className="sub">{genre.description}</p>
-              <div className="genre-tags" aria-label="장르 태그">
-                {genre.tags.map((tag) => (
-                  <span key={tag} className="genre-tag">
-                    {tag}
-                  </span>
-                ))}
+              <div className="hero-inner">
+                <SajuGirl size="lg" />
+                <div className="hero-copy">
+                  <p className="brand">사주미</p>
+                  <h1 className="headline">{genre.label}</h1>
+                  <p className="sub-lead">{genre.headline}</p>
+                  <p className="sub">{genre.description}</p>
+                  <div className="genre-tags" aria-label="장르 태그">
+                    {genre.tags.map((tag) => (
+                      <span key={tag} className="genre-tag">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
             </header>
 
-            <section className="panel" key={formKey} aria-label={`${genre.label} 입력`}>
+            <section
+              ref={formPanelRef}
+              className="panel"
+              key={formKey}
+              aria-label={`${genre.label} 입력`}
+            >
               {editingId && (
-                <p className="edit-banner">저장된 사주를 수정합니다. 다시 보면 이 기록이 바뀝니다.</p>
+                <p className="edit-banner">
+                  {needsPartner
+                    ? '저장된 사주를 수정합니다. 상대 정보를 바꾸면 이 기록이 바뀝니다.'
+                    : '저장된 사주를 다시 봅니다. 다시 저장하면 이 기록이 바뀝니다.'}
+                </p>
               )}
-              <PersonForm
-                title={needsPartner ? '본인' : ''}
-                person={self}
-                onChange={setSelf}
-                nameRef={nameInputRef}
-              />
+
+              {usesSavedProfile ? (
+                <ProfileSummary
+                  title={needsPartner ? '본인' : ''}
+                  person={self}
+                  onChangeProfile={() => setPickerOpen(true)}
+                  onEdit={() => {
+                    setProfileMode('edit')
+                    setProfileOpen(true)
+                  }}
+                />
+              ) : (
+                <PersonForm
+                  title={needsPartner ? '본인' : ''}
+                  person={self}
+                  onChange={setSelf}
+                  nameRef={nameInputRef}
+                />
+              )}
 
               {needsPartner && (
                 <PersonForm
@@ -580,27 +947,45 @@ function App() {
                 />
               )}
 
-              <button
-                type="button"
-                className="analyze-btn"
-                onClick={handleAnalyze}
-                disabled={loading}
-              >
-                {loading
-                  ? '명식을 읽는 중…'
-                  : editingId
-                    ? `${genre.label} 다시 저장`
-                    : genre.buttonLabel}
-              </button>
+              {!user && requiresAuth ? (
+                <GenreAuthGate
+                  genre={genre}
+                  onAuthError={setError}
+                  onSeeLife={() => handleGenreChange(DEFAULT_GENRE_ID)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="analyze-btn"
+                  onClick={handleAnalyze}
+                  disabled={loading || (Boolean(user) && !profileComplete)}
+                >
+                  {loading
+                    ? '명식을 들여다보는 중이에요!'
+                    : editingId
+                      ? `${genre.label} 다시 저장`
+                      : genre.buttonLabel}
+                </button>
+              )}
+
+              {user && !profileComplete && profileReady && (
+                <p className="auth-hint">프로필을 저장하면 사주를 볼 수 있습니다.</p>
+              )}
 
               {error && <p className="error">{error}</p>}
             </section>
+
+            {typeof readingCount === 'number' && readingCount > 0 && !result && !loading && (
+              <p className="reading-count">
+                총 <strong>{readingCount.toLocaleString('ko-KR')}</strong>개의 사주가 생성되었습니다
+              </p>
+            )}
 
             {loading && chartViews.length === 0 && (
               <ReadingSkeleton
                 title="사주 명식"
                 lines={5}
-                status="만세력으로 명식을 계산하는 중…"
+                status="명식을 그리는 중이에요!"
               />
             )}
 
@@ -620,24 +1005,28 @@ function App() {
             )}
 
             {loading && !result && (
-              <ReadingSkeleton
-                title={`${genre.label} 해석`}
-                lines={8}
-                status={`${genre.label} 해석을 작성하는 중…`}
-              />
+              <InterpretingScene title={`${genre.label} 해석`} />
             )}
 
             {result && (
-              <section className="reading result-reading">
-                <h2 className="reading-title">{genre.label} 해석</h2>
-                <p className="result-byline">
-                  {personByline(self)}
-                  {needsPartner && partner.name ? `  |  ${personByline(partner)}` : ''}
-                </p>
-                <div className="markdown result-md">
-                  <Markdown>{result}</Markdown>
-                </div>
+              <ResultReading
+                genre={genre}
+                self={self}
+                partner={partner}
+                needsPartner={needsPartner}
+                result={result}
+                locked={resultLocked}
+                onAuthError={setError}
+              >
                 <div className="view-actions">
+                  <button
+                    type="button"
+                    className="share-reading-btn"
+                    onClick={handleShare}
+                    disabled={sharing}
+                  >
+                    {sharing ? '링크 만드는 중…' : '친구에게 공유'}
+                  </button>
                   <button
                     type="button"
                     className="new-reading-btn"
@@ -645,14 +1034,14 @@ function App() {
                   >
                     새 사주 만들기
                   </button>
-                  {editingId && (
+                  {editingId && user && (
                     <button
                       type="button"
                       className="delete-reading-btn"
                       onClick={() =>
                         handleDeleteReading({
                           id: editingId,
-                          name: self.name,
+                          partner_name: partner.name,
                         })
                       }
                     >
@@ -660,11 +1049,44 @@ function App() {
                     </button>
                   )}
                 </div>
-              </section>
+                {!user && !requiresAuth && <GuestUpgrade onAuthError={setError} />}
+              </ResultReading>
             )}
           </>
         )}
       </main>
+
+      <ProfilePickerModal
+        open={pickerOpen && Boolean(user)}
+        profiles={profiles}
+        activeId={selectedProfileId}
+        onSelect={(row) => {
+          setPickerOpen(false)
+          applyProfile(row)
+        }}
+        onCreate={openCreateProfile}
+        onClose={() => setPickerOpen(false)}
+      />
+
+      <ProfileModal
+        open={profileOpen && Boolean(user)}
+        mode={profileMode}
+        initialPerson={profileMode === 'create' ? emptyPerson : self}
+        onSave={handleSaveProfile}
+        onClose={() => {
+          if (profileMode !== 'required') setProfileOpen(false)
+        }}
+      />
+
+      <ShareModal
+        open={shareOpen}
+        shareId={shareId}
+        title={`${self.name}의 ${genre.label} | 사주미`}
+        onClose={() => setShareOpen(false)}
+        onRevoke={user ? handleRevokeShare : undefined}
+      />
+
+      <Toast notice={toast} />
     </div>
   )
 }
