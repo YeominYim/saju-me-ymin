@@ -141,6 +141,66 @@ function GenreLockIcon() {
   )
 }
 
+function GenreNav({ genreId, user, onChange }) {
+  const scrollerRef = useRef(null)
+  const [overflow, setOverflow] = useState({ left: false, right: false })
+
+  function updateOverflow() {
+    const el = scrollerRef.current
+    if (!el) return
+    const max = el.scrollWidth - el.clientWidth
+    setOverflow({
+      left: el.scrollLeft > 6,
+      right: max - el.scrollLeft > 6,
+    })
+  }
+
+  useEffect(() => {
+    const el = scrollerRef.current
+    if (!el) return
+
+    updateOverflow()
+    el.addEventListener('scroll', updateOverflow, { passive: true })
+    const observer = new ResizeObserver(updateOverflow)
+    observer.observe(el)
+
+    return () => {
+      el.removeEventListener('scroll', updateOverflow)
+      observer.disconnect()
+    }
+  }, [user])
+
+  useEffect(() => {
+    const el = scrollerRef.current
+    const active = el?.querySelector('.genre-tab.is-active')
+    if (!active) return
+    active.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
+    window.setTimeout(updateOverflow, 280)
+  }, [genreId])
+
+  return (
+    <nav
+      className={`genre-nav ${overflow.left ? 'has-left' : ''} ${overflow.right ? 'has-right' : ''}`}
+      aria-label="사주 장르"
+    >
+      <div className="genre-nav-inner" ref={scrollerRef}>
+        {GENRES.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`genre-tab ${item.id === genreId ? 'is-active' : ''} ${item.requiresAuth && !user ? 'is-locked' : ''}`}
+            onClick={() => onChange(item.id)}
+            aria-pressed={item.id === genreId}
+          >
+            {item.label}
+            {item.requiresAuth && !user ? <GenreLockIcon /> : null}
+          </button>
+        ))}
+      </div>
+    </nav>
+  )
+}
+
 function GenreAuthGate({ genre, onAuthError, onSeeLife }) {
   const redirectTo = `${window.location.origin}/?genre=${genre.id}`
 
@@ -733,22 +793,7 @@ function App() {
       <div className="glow glow-b" aria-hidden="true" />
       <div className="mist" aria-hidden="true" />
 
-      <nav className="genre-nav" aria-label="사주 장르">
-        <div className="genre-nav-inner">
-          {GENRES.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`genre-tab ${item.id === genreId ? 'is-active' : ''} ${item.requiresAuth && !user ? 'is-locked' : ''}`}
-              onClick={() => handleGenreChange(item.id)}
-              aria-pressed={item.id === genreId}
-            >
-              {item.label}
-              {item.requiresAuth && !user ? <GenreLockIcon /> : null}
-            </button>
-          ))}
-        </div>
-      </nav>
+      <GenreNav genreId={genreId} user={user} onChange={handleGenreChange} />
 
       <HistorySidebar
         user={user}

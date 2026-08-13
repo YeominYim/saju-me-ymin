@@ -122,6 +122,46 @@
   backdrop-filter: blur(14px);
 }
 
+.genre-nav::before,
+.genre-nav::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 2.4rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.genre-nav::before {
+  left: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 253, 248, 0.97) 0%,
+    rgba(255, 253, 248, 0) 100%
+  );
+}
+
+.genre-nav::after {
+  right: 0;
+  background: linear-gradient(
+    270deg,
+    rgba(255, 253, 248, 0.97) 38%,
+    rgba(255, 253, 248, 0) 100%
+  );
+}
+
+.genre-nav.has-left::before,
+.genre-nav.has-right::after {
+  opacity: 1;
+}
+
+.genre-nav.has-right::after {
+  width: 2.8rem;
+}
+
 .genre-nav-inner {
   display: flex;
   gap: 0.35rem;
@@ -131,6 +171,7 @@
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  scroll-padding-inline: 1.6rem;
 }
 
 .genre-nav-inner::-webkit-scrollbar {
@@ -1896,9 +1937,9 @@
   }
 
   .genre-nav-inner {
-    width: calc(100% - 0.5rem);
-    padding-left: 0.35rem;
-    padding-right: 0.35rem;
+    width: 100%;
+    padding-left: 0.7rem;
+    padding-right: 1.65rem;
   }
 
   .genre-tab {
